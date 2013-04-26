@@ -8,6 +8,8 @@ needed for the S2A hardware.)
 '''
 
 import sys
+import time
+
 import SFAClient
 
 def main_func():
@@ -29,6 +31,13 @@ def main_func():
     print "Hello World!"
     
     c = SFAClient.SFAClient( "sultan-12k1", "xmr", "bogus_password")
+    print "Connected to client"
+
+    time.sleep(10) # give the background thread some time to poll a couple of times
+    for i in range(5):
+        print c.get_read_iops( 0, 5)
+        time.sleep( 10)
+
         
     print "Stopping thread..."
     if c.stop_thread(True, 15):

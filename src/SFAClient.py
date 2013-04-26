@@ -42,7 +42,7 @@ class SFAClient( threading.Thread):
         # TODO: we probably want to read these values from a config file
         self._fast_poll_interval = 2.0 # in seconds
         self._med_poll_multiple = 15 # multiples of _fast_poll_interval
-        self._slow_poll_multple = 60 # multiples of _fast_poll_interval
+        self._slow_poll_multiple = 60 # multiples of _fast_poll_interval
         # values of 2.0, 15 & 60 will result in polling every 2 seconds,
         # 30 seconds and 2 minutes for fast, medium and slow, respectively
         
@@ -99,6 +99,7 @@ class SFAClient( threading.Thread):
         Returns a tuple: first value is the calculated average, second
         is the actual timespan (in seconds) used to calculate the average 
         '''
+        #TODOL need some protection against list index out of range errors!
         self._lock.acquire()
         #TODO: if host_channel is out of range, this will throw an exception
         # Probably need to catch, release the lock and then rethrow...
@@ -153,7 +154,7 @@ class SFAClient( threading.Thread):
                 self._host_channel_read_iops[i].append(host_channels_stats[i].ReadIOs[0])
                 self._host_channel_write_iops[i].append(host_channels_stats[i].WriteIOs[0])
                 self._host_channel_transfer_bytes[i].append(
-                        host_channels_stats[i].KBytesTransfered[0] * 1024) # convert to bytes
+                        host_channels_stats[i].KBytesTransferred[0] * 1024) # convert to bytes
             
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):

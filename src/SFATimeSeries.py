@@ -55,6 +55,15 @@ class SFATimeSeries( object):
         every 2 seconds, but a 5 second average is requested, the actual span will be
         4 seconds.)
         '''
+        
+        # Sanity check - if we only have one value in the series, just return
+        # that value (and a time span of 0)
+        # TODO: how to we handle an empty time series? Return 0? Throw an exception?
+        if len(self._series) == 1:
+            return (self._series[0][0], 0.0)
+        
+        # Normal case: find the value who's time stamp is closest to what we want
+        # and compute the average using it and the most recent value
         last_index = len(self._series) - 1
         first_index = self._binary_search( self._series[last_index][1] - span)
         average = ((self._series[last_index][0] - self._series[first_index][0]) /

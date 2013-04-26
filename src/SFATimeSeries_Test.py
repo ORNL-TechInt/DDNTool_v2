@@ -98,6 +98,26 @@ class SFATimeSeries_Test( unittest.TestCase):
         
         self.assertAlmostEqual(result[0], SERIES_RATE, delta=SERIES_RATE*.005)  # accurate to 0.5%
         
+    # verify the average() function works even when there's only 1 value
+    def testSingleValueAverage(self):
+        local_series = SFATimeSeries()
+        VALUE = 25
+        local_series.append( VALUE)
+        result = local_series.average(100)
+        self.assertEqual(VALUE, result[0],
+                         "Single value average() test returned %f instead of %f"%(result[0], VALUE))
+        self.assertEqual(0, result[1],
+                         "Single value average() test returnd a time span of %f instead of 0"%result[1])
+        
+    # verify the average() function doesn't blow up when the series is empty
+    #def testEmptyAverage(self):
+    #    local_series = SFATimeSeries()
+    #    result = local_series.average(100)
+    #    
+    #    self.assertEqual(VALUE, result[0],
+    #                     "Single value average() test returned %f instead of %f"%(result[0], VALUE))
+    #    self.assertEqual(0, result[1],
+    #                     "Single value average() test returnd a time span of %f instead of 0"%result[1])
         
 if __name__ == '__main__':
     unittest.main()

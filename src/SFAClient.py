@@ -99,7 +99,7 @@ class SFAClient( threading.Thread):
         Returns a tuple: first value is the calculated average, second
         is the actual timespan (in seconds) used to calculate the average 
         '''
-        #TODOL need some protection against list index out of range errors!
+        #TODO: need some protection against list index out of range errors!
         self._lock.acquire()
         #TODO: if host_channel is out of range, this will throw an exception
         # Probably need to catch, release the lock and then rethrow...
@@ -180,11 +180,17 @@ class SFAClient( threading.Thread):
         '''
         Log in to the DDN hardware
         '''
-        APIConnect( self._uri, (self._user, self._password))
-        # Note: this will throw an exception if it can't connect
-        # Known exceptions:
-        # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
-        # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
-        self._connected = True;
+        try:
+            APIConnect( self._uri, (self._user, self._password))
+            # Note: this will throw an exception if it can't connect
+            # Known exceptions:
+            # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
+            # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
+            self._connected = True;
+        except ddn.sfa.core.APIContextException, e:
+            pass
+        except pywbem.cim_operations.CIMError, e:
+            pass
+        
 
 

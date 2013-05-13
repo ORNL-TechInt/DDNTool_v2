@@ -9,7 +9,7 @@ import time
 
 from SFATimeSeries import SFATimeSeries
 
-#from ddn.sfa.api import *
+from ddn.sfa.api import *
 
     
     
@@ -29,7 +29,8 @@ class SFAClient( threading.Thread):
         threading.Thread.__init__( self, name=address)
         
         self._lock = threading.Lock()
-        
+       
+        self._address = address 
         self._uri = "https://" + address
         self._user = username
         self._password = password
@@ -76,7 +77,14 @@ class SFAClient( threading.Thread):
         
         return ( not self.isAlive())
         
-    
+   
+    def get_host_name(self):
+        '''
+        Mostly a convenience function so we can map an object back to a
+        human-readable name.
+        ''' 
+        return self._address
+
     def get_read_bw(self):
         '''
         getter
@@ -187,10 +195,10 @@ class SFAClient( threading.Thread):
             # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
             # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
             self._connected = True;
-        except ddn.sfa.core.APIContextException, e:
+        except APIContextException, e:
             pass
-        except pywbem.cim_operations.CIMError, e:
-            pass
+        #except CIMError, e:
+        #    pass
         
 
 

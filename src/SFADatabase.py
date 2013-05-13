@@ -65,6 +65,28 @@ class SFADatabase(object):
             
         cursor.close()
         return num_inserts
+
+    def update_main_table( self, sfa_client_name,
+                           read_bw, write_bw,
+                           read_iops, write_iops,
+                           rebuild_bw, verify_bw):
+        '''
+        Updates one row in the main table.  The row for the particular client
+        must already exist. (See verify_main_table())
+        '''
+
+        query = "UPDATE " + TABLE_NAMES['MAIN_TABLE_NAME'] + " SET Read_BW = %s, " + \
+            "Write_BW = %s, Read_IOPS = %s, Write_IOPS = %s, Rebuild_BW = %s, " + \
+            "Verify_BW = %s WHERE Hostname = %s;"
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( query, (str(read_bw), str(write_bw), str(read_iops),
+                                str(write_iops), str(rebuild_bw), str(verify_bw),
+                                sfa_client_name))
+	cursor.close()
+                             
+
+
  
     def _create_schema(self):
         # at the moment, we only have one table.  However, I expect that to change quickly

@@ -14,6 +14,14 @@ import time
 import SFAClient
 import SFADatabase
 
+###### Remote Debugging using winpdb #######
+import rpdb2
+rpdb2.start_embedded_debugger('xmr')
+# xmr is the session password - make sure port 51000 is open
+# Note: calling stat_embedded_debuger will cause the program execution to
+# freeze until the debugger actually connects to it.
+#############################################
+
 DEFAULT_CONF_FILE="./ddntool.conf"  # config file to use if not specified on the command line 
 
 def main_func():
@@ -39,40 +47,42 @@ def main_func():
     config.read(DEFAULT_CONF_FILE)
     
     # Connect to the DDN hardware
-    #sfa_user = config.get('ddn_hardware', 'sfa_user')
-    #sfa_password = config.get('ddn_hardware', 'sfa_password')
-    #sfa_hosts = [ host.strip() for host in config.get('ddn_hardware', 'sfa_hosts').split(",") ]
-    #sfa_clients = []
-    #for host in sfa_hosts:
-    #    client = SFAClient.SFAClient( host, sfa_user, sfa_password)
-    #    if client.is_connected():
-    #        sfa_clients.append()
-    #    else:
-    #        print "Failed to connect to SFA Host %s"%host
+    sfa_user = config.get('ddn_hardware', 'sfa_user')
+    sfa_password = config.get('ddn_hardware', 'sfa_password')
+    sfa_hosts = [ host.strip() for host in config.get('ddn_hardware', 'sfa_hosts').split(",") ]
+    sfa_clients = []
+    for host in sfa_hosts:
+        client = SFAClient.SFAClient( host, sfa_user, sfa_password)
+        sfa_clients.append( client)
+
+    time.sleep(5)
+    if not client.is_connected():
+        print "Failed to connect to SFA Host %s"%host
      
     # Connect to the database
     db_user = config.get('database', 'db_user')
     db_password = config.get('database', 'db_password')
     db_host = config.get('database', 'db_host')
     db_name = config.get('database', 'db_name')
-    db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name)
+    db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, True)
+    db.verify_main_table( sfa_hosts)
     
-
-    #time.sleep(10) # give the background thread some time to poll a couple of times
-    #for i in range(5):
-    #    print c.get_read_iops( 0, 5)
-    #    time.sleep( 10)
+    time.sleep(10) # give the background thread some time to poll a couple of times
+    for client in sfa_clients:
+        read_iops = client.get_read_iops( 0, 5)
+        db.update_main_table(client.get_host_name(), 3.1415, 2.71, read_iops, 0, 0, 0)
 
         
-    print "Stopping thread..."
-    if c.stop_thread(True, 15):
-        print "Thread ended"
-    else:
-        print "Thread still running"
+    print "Stopping threads..."
+    for c in sfa_clients:
+        if c.stop_thread(True, 15):
+            print "Thread ended"
+        else:
+            print "Thread still running"
     
-    c.join()
-    print "Thread definitely ended"
-
+    for c in sfa_clients:
+        c.join()
+        print "Thread definitely ended"
 
 
 if __name__ == '__main__':

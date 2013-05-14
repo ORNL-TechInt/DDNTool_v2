@@ -10,13 +10,14 @@ needed for the S2A hardware.)
 import ConfigParser
 import sys
 import time
+import argparse
 
 import SFAClient
 import SFADatabase
 
 ###### Remote Debugging using winpdb #######
 import rpdb2
-rpdb2.start_embedded_debugger('xmr')
+#rpdb2.start_embedded_debugger('xmr')
 # xmr is the session password - make sure port 51000 is open
 # Note: calling stat_embedded_debuger will cause the program execution to
 # freeze until the debugger actually connects to it.
@@ -25,7 +26,7 @@ rpdb2.start_embedded_debugger('xmr')
 DEFAULT_CONF_FILE="./ddntool.conf"  # config file to use if not specified on the command line 
 
 def main_func():
-
+    
     # Quick summary:
     # Open & parse the config file
     # Open the DB and create the in-memory tables
@@ -35,16 +36,25 @@ def main_func():
     #     push the results up to the DB
     
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--conf_file",
+                        help="Specify the name of the configuration file.  (Default is '" + 
+                             DEFAULT_CONF_FILE + "')",
+                        default=DEFAULT_CONF_FILE)
+    parser.add_argument('-i', '--init_db',
+                        help='Initialize the database on startup.',
+                        action='store_true');
+
+    args = parser.parse_args()
+
+
     print "Args: ",
-    for arg in sys.argv:
-        print arg,
+    print args
     
-    print    
-    print "Hello World!"
     
     
     config = ConfigParser.ConfigParser()
-    config.read(DEFAULT_CONF_FILE)
+    config.read(args.conf_file)
     
     # Connect to the DDN hardware
     sfa_user = config.get('ddn_hardware', 'sfa_user')
@@ -64,7 +74,7 @@ def main_func():
     db_password = config.get('database', 'db_password')
     db_host = config.get('database', 'db_host')
     db_name = config.get('database', 'db_name')
-    db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, True)
+    db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, args.init_db)
     db.verify_main_table( sfa_hosts)
     
     time.sleep(10) # give the background thread some time to poll a couple of times

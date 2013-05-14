@@ -83,7 +83,7 @@ class SFADatabase(object):
         cursor.execute( query, (str(read_bw), str(write_bw), str(read_iops),
                                 str(write_iops), str(rebuild_bw), str(verify_bw),
                                 sfa_client_name))
-	cursor.close()
+        cursor.close()
                              
 
 

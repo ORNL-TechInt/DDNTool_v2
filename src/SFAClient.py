@@ -85,23 +85,26 @@ class SFAClient( threading.Thread):
         ''' 
         return self._address
 
-    def get_read_bw(self):
+    def get_transfer_bw(self, host_channel, span):
+        ''' 
+        Return the transfer bandwidth (in bytes/sec) for the specified
+        host_channel averaged over the specified number of seconds
+                
+        Returns a tuple: first value is the calculated average, second
+        is the actual timespan (in seconds) used to calculate the average 
         '''
-        getter
-        '''
-        #TODO: Implement me!
-        pass
-    
-    def get_write_bw(self):
-        '''
-        getter
-        '''
-        #TODO: Implement me!
-        pass
-    
+        #TODO: need some protection against list index out of range errors!
+        self._lock.acquire()
+        try:    
+            average = self._host_channel_transfer_bytes[host_channel].average(span)
+        finally:
+            self._lock.release() # always release the lock, even if
+                                 # an exception occurs above 
+        return average
+ 
     def get_read_iops(self, host_channel, span):
         '''
-        Return the  read IOPs for the specified host_channel averaged
+        Return the read IOPs for the specified host_channel averaged
         over the specified number of seconds
         
         Returns a tuple: first value is the calculated average, second
@@ -109,30 +112,37 @@ class SFAClient( threading.Thread):
         '''
         #TODO: need some protection against list index out of range errors!
         self._lock.acquire()
-        #TODO: if host_channel is out of range, this will throw an exception
-        # Probably need to catch, release the lock and then rethrow...
-        average = self._host_channel_read_iops[host_channel].average(span)
-        self._lock.release()
+        try:
+            average = self._host_channel_read_iops[host_channel].average(span)
+        finally:
+            self._lock.release() # always release the lock, even if
+                                 # an exception occurs above
         return average
         
     
-    def get_write_iops(self):
+    def get_write_iops(self, host_channel, span):
         '''
-        getter
+        Return the write IOPs for the specified host_channel averaged
+        over the specified number of seconds
+        
+        Returns a tuple: first value is the calculated average, second
+        is the actual timespan (in seconds) used to calculate the average 
         '''
-        #TODO: Implement me!
-        pass
+        #TODO: need some protection against list index out of range errors!
+        self._lock.acquire()
+        try:
+            average = self._host_channel_write_iops[host_channel].average(span)
+        finally:
+            self._lock.release() # always release the lock, even if
+                                 # an exception occurs above
+        return average
+
     
     def run(self):
         '''
         Main body of the background thread:  polls the SFA, post-processes the data and makes the results
         available to the getter functions.
         '''
-        #TODO: Implement me!
-        #print "Hello from thread ", self.getName()
-        #print "Sleeping..."
-        #sleep( 10)  # in seconds
-        #print "Thread exiting"
         
         self._connect()
 

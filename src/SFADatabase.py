@@ -67,7 +67,7 @@ class SFADatabase(object):
         return num_inserts
 
     def update_main_table( self, sfa_client_name,
-                           read_bw, write_bw,
+                           transfer_bw, 
                            read_iops, write_iops,
                            rebuild_bw, verify_bw):
         '''
@@ -75,12 +75,12 @@ class SFADatabase(object):
         must already exist. (See verify_main_table())
         '''
 
-        query = "UPDATE " + TABLE_NAMES['MAIN_TABLE_NAME'] + " SET Read_BW = %s, " + \
-            "Write_BW = %s, Read_IOPS = %s, Write_IOPS = %s, Rebuild_BW = %s, " + \
+        query = "UPDATE " + TABLE_NAMES['MAIN_TABLE_NAME'] + " SET " + \
+            "Transfer_BW = %s, Read_IOPS = %s, Write_IOPS = %s, Rebuild_BW = %s, " + \
             "Verify_BW = %s WHERE Hostname = %s;"
 
         cursor = self._dbcon.cursor()
-        cursor.execute( query, (str(read_bw), str(write_bw), str(read_iops),
+        cursor.execute( query, (str(transfer_bw), str(read_iops),
                                 str(write_iops), str(rebuild_bw), str(verify_bw),
                                 sfa_client_name))
         cursor.close()
@@ -123,8 +123,8 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["MAIN_TABLE_NAME"] + \
         "(Hostname VARCHAR(75) KEY, LastUpdate TIMESTAMP, DDN_Name VARCHAR( 75)," + \
         "DDN_Partner_Name VARCHAR( 75), Unit_Number TINYINT UNSIGNED, Alarm BOOL," + \
-        "Time_Since_Restart VARCHAR( 30), Total_Uptime VARCHAR( 30),Read_BW FLOAT," + \
-        "Write_BW FLOAT, Read_IOPS FLOAT, Write_IOPS FLOAT, Rebuild_BW FLOAT, Verify_BW FLOAT," + \
+        "Time_Since_Restart VARCHAR( 30), Total_Uptime VARCHAR( 30)," + \
+        "Transfer_BW FLOAT, Read_IOPS FLOAT, Write_IOPS FLOAT, Rebuild_BW FLOAT, Verify_BW FLOAT," + \
         "Cache_Size INT UNSIGNED, Cache_Error BOOL, WC_Disabled BOOL," + \
         "WC_Disable_Reason VARCHAR( 75), Disk_Failures SMALLINT UNSIGNED," + \
         "INDEX( Hostname))" + \

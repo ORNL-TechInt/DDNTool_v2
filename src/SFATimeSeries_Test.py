@@ -109,6 +109,27 @@ class SFATimeSeries_Test( unittest.TestCase):
         self.assertEqual(0, result[1],
                          "Single value average() test returnd a time span of %f instead of 0"%result[1])
         
+    # verify the average() function works with very short time spans
+    # This is a regression test.  The idea is to pass a small enough span to average()
+    # that it picks the most recent sample for both the start and end points of the 
+    # average calculation.  This originally resulted in a divide-by-zero error.
+    def testShortTimeSpanAverage(self):
+        # build up a small time series
+        local_series = SFATimeSeries()
+        local_series.append(1)
+        time.sleep(0.1)
+        local_series.append(2)
+        time.sleep(0.1)
+        local_series.append(3)
+        
+        result = local_series.average(0.0001)
+        # If this doesn't divide by zero, the test passes
+        
+        
+        
+        
+        
+        
     # verify the average() function doesn't blow up when the series is empty
     #def testEmptyAverage(self):
     #    local_series = SFATimeSeries()

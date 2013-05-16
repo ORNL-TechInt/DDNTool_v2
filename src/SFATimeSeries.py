@@ -66,6 +66,13 @@ class SFATimeSeries( object):
         # and compute the average using it and the most recent value
         last_index = len(self._series) - 1
         first_index = self._binary_search( self._series[last_index][1] - span)
+        
+        # Sanity check:  If we were called with a very small span value, the binary search
+        # function could return last_index as the best choice.  If first_index == last_index
+        # though, we'd get a divide-by-zero error.
+        if first_index == last_index:
+            first_index = last_index - 1
+              
         average = ((self._series[last_index][0] - self._series[first_index][0]) /
                    (self._series[last_index][1] - self._series[first_index][1]))
         average = abs( average)

@@ -12,6 +12,7 @@ import mysql.connector
 # a SHOW TABLES statement
 TABLE_NAMES = {
              "MAIN_TABLE_NAME" : u"Main",
+             "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays"
 #define USER_TABLE_NAME             "Users"
  }
@@ -86,6 +87,25 @@ class SFADatabase(object):
         cursor.close()
                              
 
+    def update_vd_table( self, sfa_client_name, vd_num, transfer_bw,
+                         read_iops, write_iops, forwarded_bw,
+                         forwarded_iops):
+        '''
+        Updates the row in the virtual disk table for the specified 
+        client and virtual disk.
+        '''
+
+        replace_query = "REPLACE INTO " + TABLE_NAMES['VIRTUAL_DISK_TABLE_NAME'] + \
+                "(Hostname, Disk_Num, Transfer_BW, Read_IOPS, Write_IOPS, " \
+                "Forwarded_BW, Forwarded_IOPS) " \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s);"
+        
+        cursor = self._dbcon.cursor()
+        cursor.execute( replace_query, (sfa_client_name, str(vd_num), str(transfer_bw),
+                                        str(read_iops), str(write_iops),
+                                        str(forwarded_bw), str(forwarded_iops)))
+        cursor.close()
+
 
  
     def _create_schema(self):
@@ -111,6 +131,7 @@ class SFADatabase(object):
         
         # create the new table(s)
         self._new_main_table()
+        self._new_vd_table()
     
     
     def _new_main_table(self):
@@ -133,5 +154,26 @@ class SFADatabase(object):
 
         cursor = self._dbcon.cursor()
         cursor.execute( table_def)
+        cursor.close()
+
+    def _new_vd_table(self):
+        '''
+        Create the db table that holds statistics on all the virtual disks
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["VIRTUAL_DISK_TABLE_NAME"] + " "  \
+        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+        "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
+        "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
+        "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
+        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+        "INDEX( Hostname), INDEX( Disk_Num) )"  \
+        "ENGINE=HEAP"  \
+        ";"
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( table_def)
+        cursor.close()
 
         

@@ -120,10 +120,16 @@ def main_func():
         while True:
             time.sleep(5) 
             for client in sfa_clients:
-                read_iops = client.get_read_iops( 0, 5)
-                write_iops = client.get_write_iops( 0, 5)
-                bandwidth = client.get_transfer_bw( 0, 5)
-                db.update_main_table(client.get_host_name(), bandwidth, read_iops, write_iops, 0, 0)
+                for vd_num in range(client.get_num_vds()):
+                    read_iops = client.get_read_iops( vd_num, 60)
+                    write_iops = client.get_write_iops( vd_num, 60)
+                    bandwidth = client.get_transfer_bw( vd_num, 60)
+                    fw_bandwidth = client.get_forwarded_bw( vd_num, 60)
+                    fw_iops = client.get_forwarded_iops( vd_num, 60)
+                    db.update_vd_table(client.get_host_name(), vd_num, bandwidth[0],
+                                       read_iops[0], write_iops[0], fw_bandwidth[0],
+                                       fw_iops[0])
+
     except KeyboardInterrupt:
         # Perfectly normal.  Ctrl-C is how we expect to exit
         pass

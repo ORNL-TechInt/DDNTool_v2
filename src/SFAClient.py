@@ -48,13 +48,16 @@ class SFAClient( threading.Thread):
         # 30 seconds and 2 minutes for fast, medium and slow, respectively
         
                 
-        # Lists of SFATimeSeries objects for specific values
-        # (one series for each virtual disk on the controller)   
-        self._vd_read_iops = []
-        self._vd_write_iops = []
-        self._vd_transfer_bytes = []
-        self._vd_forwarded_bytes = []
-        self._vd_forwarded_iops = []
+        # Dictionaries of SFATimeSeries objects for specific values -
+        # one series for each virtual disk on the controller.
+        # The keys are actually integers derived from the ElementName
+        # property.  Using a dictionary instead of a list because
+        # numbers are apparently not guarenteed to be contiguous
+        self._vd_read_iops = {}
+        self._vd_write_iops = {}
+        self._vd_transfer_bytes = {}
+        self._vd_forwarded_bytes = {}
+        self._vd_forwarded_iops = {}
         
         self.start()    # kick off the background thread
         
@@ -87,17 +90,17 @@ class SFAClient( threading.Thread):
         ''' 
         return self._address
 
-    def get_num_vds(self):
+    def get_vd_nums(self):
         '''
-        Returns the number of virtual disks this client has
+        Returns a sorted list of all the virtual disk numbers this client has
         '''
         self._lock.acquire()
         try:
-            num = len(self._vd_read_iops)
+            nums = sorted(self._vd_read_iops)
         finally:
             self._lock.release()
         
-        return num
+        return nums
 
 
     def get_transfer_bw(self, vd_num, span):
@@ -199,12 +202,16 @@ class SFAClient( threading.Thread):
 
         # initialize the time series arrays
         vd_stats = SFAVirtualDiskStatistics.getAll()
-        for i in range(len(vd_stats)):
-            self._vd_read_iops.append(SFATimeSeries( 300)) # 10 minutes of data at 2 second sample rate
-            self._vd_write_iops.append(SFATimeSeries( 300))
-            self._vd_transfer_bytes.append(SFATimeSeries( 300))      
-            self._vd_forwarded_bytes.append(SFATimeSeries( 300))
-            self._vd_forwarded_iops.append(SFATimeSeries( 300))
+        for stats in vd_stats:
+            index = stats.Index
+
+            #300 entries is 10 minutes of data at 2 second sample rate
+            self._vd_read_iops[index] = SFATimeSeries( 300) 
+            self._vd_write_iops[index] = SFATimeSeries( 300)
+            self._vd_transfer_bytes[index] = SFATimeSeries( 300)
+            self._vd_forwarded_bytes[index] = SFATimeSeries( 300)
+            self._vd_forwarded_iops[index] = SFATimeSeries( 300)
+
         self._lock.release()
   
         next_fast_poll_time = 0
@@ -223,22 +230,24 @@ class SFAClient( threading.Thread):
             vd_stats = SFAVirtualDiskStatistics.getAll()
             try:
                 self._lock.acquire()  # need to lock the mutex before we modify the data series
-                for i in range(len(vd_stats)):
+                for stats in vd_stats:
+                    index = stats.Index
+                    
                     # Note: we actually get back 2 element lists - one element
                     # for each controller in the couplet.  In theory, one of those
                     # elements should always be 0.
-                    self._vd_read_iops[i].append(vd_stats[i].ReadIOs[0] + vd_stats[i].ReadIOs[1])
-                    self._vd_write_iops[i].append(vd_stats[i].WriteIOs[0] + vd_stats[i].WriteIOs[1])
-                    self._vd_transfer_bytes[i].append(
-                            (vd_stats[i].KBytesTransferred[0] + vd_stats[i].KBytesTransferred[1]) * 1024)
+                    self._vd_read_iops[index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                    self._vd_write_iops[index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                    self._vd_transfer_bytes[index].append(
+                            (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
                     # Note: converted to bytes
 
-                    self._vd_forwarded_bytes[i].append(
-                            (vd_stats[i].KBytesForwarded[0] + vd_stats[i].KBytesForwarded[1]) * 1024)
+                    self._vd_forwarded_bytes[index].append(
+                            (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
                     # Note: converted to bytes 
 
-                    self._vd_forwarded_iops[i].append(
-                            vd_stats[i].ForwardedIOs[0] + vd_stats[i].ForwardedIOs[1])
+                    self._vd_forwarded_iops[index].append(
+                            stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
             finally:
                 self._lock.release()
             

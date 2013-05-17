@@ -17,7 +17,7 @@ import SFADatabase
 
 ###### Remote Debugging using winpdb #######
 import rpdb2
-#rpdb2.start_embedded_debugger('xmr')
+rpdb2.start_embedded_debugger('xmr')
 # xmr is the session password - make sure port 51000 is open
 # Note: calling stat_embedded_debuger will cause the program execution to
 # freeze until the debugger actually connects to it.
@@ -120,7 +120,8 @@ def main_func():
         while True:
             time.sleep(5) 
             for client in sfa_clients:
-                for vd_num in range(client.get_num_vds()):
+                vd_nums = client.get_vd_nums()
+                for vd_num in vd_nums:
                     read_iops = client.get_read_iops( vd_num, 60)
                     write_iops = client.get_write_iops( vd_num, 60)
                     bandwidth = client.get_transfer_bw( vd_num, 60)

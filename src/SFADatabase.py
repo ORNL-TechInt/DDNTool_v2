@@ -12,6 +12,7 @@ import mysql.connector
 # a SHOW TABLES statement
 TABLE_NAMES = {
              "MAIN_TABLE_NAME" : u"Main",
+             "DISK_TABLE_NAME" : u"Disk",
              "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays"
 #define USER_TABLE_NAME             "Users"
@@ -106,6 +107,21 @@ class SFADatabase(object):
                                         str(forwarded_bw), str(forwarded_iops)))
         cursor.close()
 
+    def update_dd_table( self, sfa_client_name, vd_num, transfer_bw,
+            read_iops, write_iops):
+        '''
+        Updates the row in the disk table for the specified 
+        client and virtual disk.
+        '''
+
+        replace_query = "REPLACE INTO " + TABLE_NAMES['DISK_TABLE_NAME'] + \
+                        "(Hostname, Disk_Num, Transfer_BW, Read_IOPS, Write_IOPS) " \
+                        "VALUES( %s, %s, %s, %s, %s);"
+     
+        cursor = self._dbcon.cursor()
+        cursor.execute( replace_query, (sfa_client_name, str(vd_num), str(transfer_bw),
+                                        str(read_iops), str(write_iops)))
+        cursor.close()
 
  
     def _create_schema(self):
@@ -132,6 +148,7 @@ class SFADatabase(object):
         # create the new table(s)
         self._new_main_table()
         self._new_vd_table()
+        self._new_dd_table()
     
     
     def _new_main_table(self):
@@ -142,7 +159,7 @@ class SFADatabase(object):
         
         table_def = \
         "CREATE TABLE " + TABLE_NAMES["MAIN_TABLE_NAME"] + \
-        "(Hostname VARCHAR(75) KEY, LastUpdate TIMESTAMP, DDN_Name VARCHAR( 75)," + \
+       "(Hostname VARCHAR(75) KEY, LastUpdate TIMESTAMP, DDN_Name VARCHAR( 75)," + \
         "DDN_Partner_Name VARCHAR( 75), Unit_Number TINYINT UNSIGNED, Alarm BOOL," + \
         "Time_Since_Restart VARCHAR( 30), Total_Uptime VARCHAR( 30)," + \
         "Transfer_BW FLOAT, Read_IOPS FLOAT, Write_IOPS FLOAT, Rebuild_BW FLOAT, Verify_BW FLOAT," + \
@@ -176,4 +193,24 @@ class SFADatabase(object):
         cursor.execute( table_def)
         cursor.close()
 
+    def _new_dd_table(self):
+        '''
+        Create the db table that holds statistics on all the virtual disks
+        '''
+ 
+        # Note: this table is almost exactly the same as the virtual disk table.
+        # Seems like we should be able to combine these 2 functions.
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["DISK_TABLE_NAME"] + " "  \
+        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+        "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
+        "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
+        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+        "INDEX( Hostname), INDEX( Disk_Num) )"  \
+        "ENGINE=HEAP"  \
+        ";"
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( table_def)
+        cursor.close()
         

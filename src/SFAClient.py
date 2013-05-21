@@ -58,6 +58,11 @@ class SFAClient( threading.Thread):
         self._vd_transfer_bytes = {}
         self._vd_forwarded_bytes = {}
         self._vd_forwarded_iops = {}
+
+        self._dd_read_iops = {}
+        self._dd_write_iops = {}
+        self._dd_transfer_bytes = {}
+                                 
         
         self.start()    # kick off the background thread
         
@@ -102,8 +107,20 @@ class SFAClient( threading.Thread):
         
         return nums
 
+    def get_dd_nums(self):
+        '''
+        Returns a sorted list of all the disk drive indexes on this client
+        '''
+        self._lock.acquire()
+        try:
+            nums = sorted(self._dd_read_iops)
+        finally:
+            self._lock.release()
 
-    def get_transfer_bw(self, vd_num, span):
+        return nums
+
+
+    def get_vd_transfer_bw(self, vd_num, span):
         ''' 
         Return the transfer bandwidth (in bytes/sec) for the specified
         virtual disk averaged over the specified number of seconds
@@ -120,9 +137,9 @@ class SFAClient( threading.Thread):
                                  # an exception occurs above 
         return average
  
-    def get_read_iops(self, vd_num, span):
+    def get_vd_read_iops(self, vd_num, span):
         '''
-        Return the read IOPs for the specified virdual diskaveraged
+        Return the read IOPs for the specified virtual disk averaged
         over the specified number of seconds
         
         Returns a tuple: first value is the calculated average, second
@@ -138,7 +155,7 @@ class SFAClient( threading.Thread):
         return average
         
     
-    def get_write_iops(self, vd_num, span):
+    def get_vd_write_iops(self, vd_num, span):
         '''
         Return the write IOPs for the specified virtual disk averaged
         over the specified number of seconds
@@ -155,7 +172,7 @@ class SFAClient( threading.Thread):
                                  # an exception occurs above
         return average
 
-    def get_forwarded_bw( self, vd_num, span):
+    def get_vd_forwarded_bw( self, vd_num, span):
         '''
         Returns the forwarded data bandwidth (in bytes/sec) for the specified
         virtual disk averaged over the specified number of seconds
@@ -173,7 +190,7 @@ class SFAClient( threading.Thread):
         return average
         
 
-    def get_forwarded_iops( self, vd_num, span):
+    def get_vd_forwarded_iops( self, vd_num, span):
         '''
         Returns the forwarded IOPS for the specified virtual disk averaged
         over the specified number of seconds
@@ -190,6 +207,60 @@ class SFAClient( threading.Thread):
                                  # an exception occurs above
         return average
    
+
+    def get_dd_transfer_bw(self, dd_num, span):
+        ''' 
+        Return the transfer bandwidth (in bytes/sec) for the specified
+        disk drive averaged over the specified number of seconds
+                
+        Returns a tuple: first value is the calculated average, second
+        is the actual timespan (in seconds) used to calculate the average 
+        '''
+        #TODO: need some protection against list index out of range errors!
+        self._lock.acquire()
+        try:
+            average = self._dd_transfer_bytes[dd_num].average(span)
+        finally:
+            self._lock.release() # always release the lock, even if
+                                 # an exception occurs above 
+        return average
+
+
+    def get_dd_read_iops(self, dd_num, span):
+        '''
+        Return the read IOPs for the specified disk drive averaged
+        over the specified number of seconds
+        
+        Returns a tuple: first value is the calculated average, second
+        is the actual timespan (in seconds) used to calculate the average 
+        '''
+        #TODO: need some protection against list index out of range errors!
+        self._lock.acquire()
+        try:
+            average = self._dd_read_iops[dd_num].average(span)
+        finally:
+            self._lock.release() # always release the lock, even if
+                                 # an exception occurs above
+        return average
+
+
+    def get_dd_write_iops( self, dd_num, span):
+        '''
+        Returns the write IOPS for the specified disk drive averaged
+        over the specified number of seconds
+
+        Returns a tuple: first value is the caluclated average, second
+        is the actual timespan (in seconds) used to calculate the average
+        '''
+        #TODO: need some protection against list index out of range errors!
+        self._lock.acquire()
+        try:
+            average = self._dd_write_iops[dd_num].average(span)
+        finally:
+            self._lock.release() # always release the lock, even if
+                                 # an exception occurs above
+        return average
+                                                                                                                                                            
 
     def run(self):
         '''
@@ -212,6 +283,13 @@ class SFAClient( threading.Thread):
             self._vd_forwarded_bytes[index] = SFATimeSeries( 300)
             self._vd_forwarded_iops[index] = SFATimeSeries( 300)
 
+        disk_stats = SFADiskDriveStatistics.getAll()
+        for stats in disk_stats:
+            index = stats.Index
+            self._dd_read_iops[index] = SFATimeSeries( 300)
+            self._dd_write_iops[index] = SFATimeSeries( 300)
+            self._dd_transfer_bytes[index] = SFATimeSeries( 300)
+
         self._lock.release()
   
         next_fast_poll_time = 0
@@ -227,6 +305,8 @@ class SFAClient( threading.Thread):
             fast_iteration += 1
             
             ############# Fast Interval Stuff #######################
+
+            ##Virtual Disk Statistics 
             vd_stats = SFAVirtualDiskStatistics.getAll()
             try:
                 self._lock.acquire()  # need to lock the mutex before we modify the data series
@@ -248,6 +328,28 @@ class SFAClient( threading.Thread):
 
                     self._vd_forwarded_iops[index].append(
                             stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
+            finally:
+                self._lock.release()
+
+            # Yes - deliberately unlocking & re-locking the mutex to give other
+            # threads a chance to access the data
+
+            ##Disk Statistics
+            disk_stats = SFADiskDriveStatistics.getAll()
+            try:
+                self._lock.acquire()  # need to lock the mutex before we modify the data series
+                for stats in disk_stats:
+                    index = stats.Index
+
+                    # Note: we actually get back 2 element lists - one element
+                    # for each controller in the couplet.  In theory, one of those
+                    # elements should always be 0.
+                    self._dd_read_iops[index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                    self._dd_write_iops[index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                    self._dd_transfer_bytes[index].append(
+                            (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
+                    # Note: converted to bytes
+
             finally:
                 self._lock.release()
             

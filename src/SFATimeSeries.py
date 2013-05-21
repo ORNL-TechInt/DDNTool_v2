@@ -6,6 +6,14 @@ Created on 12 April, 2013
 
 import time
 
+class EmptyTimeSeriesException(Exception):
+    '''
+    An exception for indicating the time series we're trying
+    to work with is empty.
+    '''
+    pass # Don't need anything other than what's in the base class
+
+
 class SFATimeSeries( object):
     '''
     Used to hold time series data (specifically from the DDN SFA controllers)
@@ -55,7 +63,11 @@ class SFATimeSeries( object):
         every 2 seconds, but a 5 second average is requested, the actual span will be
         4 seconds.)
         '''
-        
+       
+        # Sanity check - don't call this function on an empty series!
+        if len(self._series) == 0:
+            raise EmptyTimeSeriesException()
+
         # Sanity check - if we only have one value in the series, just return
         # that value (and a time span of 0)
         # TODO: how to we handle an empty time series? Return 0? Throw an exception?

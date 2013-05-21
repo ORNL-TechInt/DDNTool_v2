@@ -15,6 +15,8 @@ import argparse
 import SFAClient
 import SFADatabase
 
+from SFATimeSeries import EmptyTimeSeriesException
+
 ###### Remote Debugging using winpdb #######
 import rpdb2
 rpdb2.start_embedded_debugger('xmr')
@@ -57,8 +59,7 @@ def clean_shutdown():
     # (hopefully not long) for the threads to exit
     for c in sfa_clients:
         if c.stop_thread( True, 10) == False:
-            raise Thread_Shutdown_Exception, \
-                "Failed to stop background thread for client %s"%c.get_host_name()
+            print "Failed to stop background thread for client %s"%c.get_host_name()
 
 
 ########## End of clean_shutdown() ##########################
@@ -100,9 +101,14 @@ def main_func():
             client = SFAClient.SFAClient( host, sfa_user, sfa_password)
             sfa_clients.append( client)
 
-        time.sleep(5)
-        if not client.is_connected():
-            print "Failed to connect to SFA Host %s"%host
+        # Wait for the hosts to connect
+        MAX_CONNECT_WAIT=5  # in seconds
+        for client in sfa_clients:
+            end_time = time.time() + MAX_CONNECT_WAIT
+            while (not client.is_connected()) and (time.time() < end_time):
+                time.sleep(0.25)
+            if not client.is_connected():
+                print "Failed to connect to SFA Host %s"%host
      
         # Connect to the database
         db_user = config.get('database', 'db_user')
@@ -122,15 +128,31 @@ def main_func():
             for client in sfa_clients:
                 vd_nums = client.get_vd_nums()
                 for vd_num in vd_nums:
-                    read_iops = client.get_read_iops( vd_num, 60)
-                    write_iops = client.get_write_iops( vd_num, 60)
-                    bandwidth = client.get_transfer_bw( vd_num, 60)
-                    fw_bandwidth = client.get_forwarded_bw( vd_num, 60)
-                    fw_iops = client.get_forwarded_iops( vd_num, 60)
-                    db.update_vd_table(client.get_host_name(), vd_num, bandwidth[0],
-                                       read_iops[0], write_iops[0], fw_bandwidth[0],
-                                       fw_iops[0])
+                    try:
+                        read_iops = client.get_vd_read_iops( vd_num, 60)
+                        write_iops = client.get_vd_write_iops( vd_num, 60)
+                        bandwidth = client.get_vd_transfer_bw( vd_num, 60)
+                        fw_bandwidth = client.get_vd_forwarded_bw( vd_num, 60)
+                        fw_iops = client.get_vd_forwarded_iops( vd_num, 60)
+                        db.update_vd_table(client.get_host_name(), vd_num, bandwidth[0],
+                                           read_iops[0], write_iops[0], fw_bandwidth[0],
+                                           fw_iops[0])
+                    except EmptyTimeSeriesException:
+                        print "Skipping empty time series for host %s, virtual disk %d"% \
+                                (client.get_host_name(), vd_num)
 
+
+                dd_nums = client.get_dd_nums()
+                for dd_num in dd_nums:
+                    try:
+                        read_iops = client.get_dd_read_iops( dd_num, 60)
+                        write_iops = client.get_dd_write_iops( dd_num, 60)
+                        bandwidth = client.get_dd_transfer_bw( dd_num, 60)
+                        db.update_dd_table(client.get_host_name(), dd_num, bandwidth[0],
+                                           read_iops[0], write_iops[0])
+                    except EmptyTimeSeriesException:
+                        print "Skipping empty time series for host %s, disk drive %d"% \
+                              (client.get_host_name(), dd_num)
     except KeyboardInterrupt:
         # Perfectly normal.  Ctrl-C is how we expect to exit
         pass

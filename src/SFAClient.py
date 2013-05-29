@@ -46,24 +46,15 @@ class SFAClient( threading.Thread):
         self._slow_poll_multiple = 60 # multiples of _fast_poll_interval
         # values of 2.0, 15 & 60 will result in polling every 2 seconds,
         # 30 seconds and 2 minutes for fast, medium and slow, respectively
-        
+   
+        # Time series data
+        # This is a dictionary of dictionaries of SFATimeSeries objects
+        # The outer dictionary maps the type of data (ie: vd_read_iops),
+        # the inner dictionary maps the actual device number.
+        # (We use an inner dictionary instead of a list so the device
+        # numbers don't have to be sequential.)
+        self._time_series = {}
                 
-        # Dictionaries of SFATimeSeries objects for specific values -
-        # one series for each virtual disk on the controller.
-        # The keys are actually integers derived from the ElementName
-        # property.  Using a dictionary instead of a list because
-        # numbers are apparently not guarenteed to be contiguous
-        self._vd_read_iops = {}
-        self._vd_write_iops = {}
-        self._vd_transfer_bytes = {}
-        self._vd_forwarded_bytes = {}
-        self._vd_forwarded_iops = {}
-
-        self._dd_read_iops = {}
-        self._dd_write_iops = {}
-        self._dd_transfer_bytes = {}
-                                 
-        
         self.start()    # kick off the background thread
         
     
@@ -95,13 +86,23 @@ class SFAClient( threading.Thread):
         ''' 
         return self._address
 
+    def get_time_series_names(self):
+        '''
+        Returns a sorted list of the names of the time series
+        '''
+        self._lock.acquire()
+        try:
+            names = sorted(self._time_series)
+        finally:
+            self._lock.release()
+
     def get_vd_nums(self):
         '''
         Returns a sorted list of all the virtual disk numbers this client has
         '''
         self._lock.acquire()
         try:
-            nums = sorted(self._vd_read_iops)
+            nums = sorted(self._time_series['vd_read_iops'])
         finally:
             self._lock.release()
         
@@ -109,158 +110,36 @@ class SFAClient( threading.Thread):
 
     def get_dd_nums(self):
         '''
-        Returns a sorted list of all the disk drive indexes on this client
+        Returns a sorted list of all the disk drive indexes on this client has
         '''
         self._lock.acquire()
         try:
-            nums = sorted(self._dd_read_iops)
+            nums = sorted(self._time_series['dd_read_iops'])
         finally:
             self._lock.release()
 
         return nums
 
 
-    def get_vd_transfer_bw(self, vd_num, span):
-        ''' 
-        Return the transfer bandwidth (in bytes/sec) for the specified
-        virtual disk averaged over the specified number of seconds
-                
+    def get_time_series_average( self, series_name, device_num, span):
+        '''
+        Return the average value for the specified series and device
+        calculated over the specified number of seconds.
+
         Returns a tuple: first value is the calculated average, second
-        is the actual timespan (in seconds) used to calculate the average 
+        value is the actual timespan (in seconds) used to calculate
+        the average.
         '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:    
-            average = self._vd_transfer_bytes[vd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above 
-        return average
- 
-    def get_vd_read_iops(self, vd_num, span):
-        '''
-        Return the read IOPs for the specified virtual disk averaged
-        over the specified number of seconds
-        
-        Returns a tuple: first value is the calculated average, second
-        is the actual timespan (in seconds) used to calculate the average 
-        '''
-        #TODO: need some protection against list index out of range errors!
+        #TODO: need some protection against 'key not found' type of
+        #errors for both the series name and device number
         self._lock.acquire()
         try:
-            average = self._vd_read_iops[vd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above
-        return average
-        
-    
-    def get_vd_write_iops(self, vd_num, span):
-        '''
-        Return the write IOPs for the specified virtual disk averaged
-        over the specified number of seconds
-        
-        Returns a tuple: first value is the calculated average, second
-        is the actual timespan (in seconds) used to calculate the average 
-        '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:
-            average = self._vd_write_iops[vd_num].average(span)
+            average = self._time_series[series_name][device_num].average(span)
         finally:
             self._lock.release() # always release the lock, even if
                                  # an exception occurs above
         return average
 
-    def get_vd_forwarded_bw( self, vd_num, span):
-        '''
-        Returns the forwarded data bandwidth (in bytes/sec) for the specified
-        virtual disk averaged over the specified number of seconds
-
-        Returns a tuple: first value is the caluclated average, second
-        is the actual timespan (in seconds) used to calculate the average
-        '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:
-            average = self._vd_forwarded_bytes[vd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above
-        return average
-        
-
-    def get_vd_forwarded_iops( self, vd_num, span):
-        '''
-        Returns the forwarded IOPS for the specified virtual disk averaged
-        over the specified number of seconds
-
-        Returns a tuple: first value is the caluclated average, second
-        is the actual timespan (in seconds) used to calculate the average
-        '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:
-            average = self._vd_forwarded_iops[vd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above
-        return average
-   
-
-    def get_dd_transfer_bw(self, dd_num, span):
-        ''' 
-        Return the transfer bandwidth (in bytes/sec) for the specified
-        disk drive averaged over the specified number of seconds
-                
-        Returns a tuple: first value is the calculated average, second
-        is the actual timespan (in seconds) used to calculate the average 
-        '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:
-            average = self._dd_transfer_bytes[dd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above 
-        return average
-
-
-    def get_dd_read_iops(self, dd_num, span):
-        '''
-        Return the read IOPs for the specified disk drive averaged
-        over the specified number of seconds
-        
-        Returns a tuple: first value is the calculated average, second
-        is the actual timespan (in seconds) used to calculate the average 
-        '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:
-            average = self._dd_read_iops[dd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above
-        return average
-
-
-    def get_dd_write_iops( self, dd_num, span):
-        '''
-        Returns the write IOPS for the specified disk drive averaged
-        over the specified number of seconds
-
-        Returns a tuple: first value is the caluclated average, second
-        is the actual timespan (in seconds) used to calculate the average
-        '''
-        #TODO: need some protection against list index out of range errors!
-        self._lock.acquire()
-        try:
-            average = self._dd_write_iops[dd_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above
-        return average
-                                                                                                                                                            
 
     def run(self):
         '''
@@ -273,22 +152,30 @@ class SFAClient( threading.Thread):
 
         # initialize the time series arrays
         vd_stats = SFAVirtualDiskStatistics.getAll()
+        self._time_series['vd_read_iops'] = { }
+        self._time_series['vd_write_iops'] = { }
+        self._time_series['vd_transfer_bytes'] = { }
+        self._time_series['vd_forwarded_bytes'] = { }
+        self._time_series['vd_forwarded_iops'] = { }
         for stats in vd_stats:
             index = stats.Index
 
             #300 entries is 10 minutes of data at 2 second sample rate
-            self._vd_read_iops[index] = SFATimeSeries( 300) 
-            self._vd_write_iops[index] = SFATimeSeries( 300)
-            self._vd_transfer_bytes[index] = SFATimeSeries( 300)
-            self._vd_forwarded_bytes[index] = SFATimeSeries( 300)
-            self._vd_forwarded_iops[index] = SFATimeSeries( 300)
+            self._time_series['vd_read_iops'][index] = SFATimeSeries( 300) 
+            self._time_series['vd_write_iops'][index] = SFATimeSeries( 300)
+            self._time_series['vd_transfer_bytes'][index] = SFATimeSeries( 300)
+            self._time_series['vd_forwarded_bytes'][index] = SFATimeSeries( 300)
+            self._time_series['vd_forwarded_iops'][index] = SFATimeSeries( 300)
 
         disk_stats = SFADiskDriveStatistics.getAll()
+        self._time_series['dd_read_iops'] = { }
+        self._time_series['dd_write_iops'] = { }
+        self._time_series['dd_transfer_bytes'] = { }
         for stats in disk_stats:
             index = stats.Index
-            self._dd_read_iops[index] = SFATimeSeries( 300)
-            self._dd_write_iops[index] = SFATimeSeries( 300)
-            self._dd_transfer_bytes[index] = SFATimeSeries( 300)
+            self._time_series['dd_read_iops'][index] = SFATimeSeries( 300)
+            self._time_series['dd_write_iops'][index] = SFATimeSeries( 300)
+            self._time_series['dd_transfer_bytes'][index] = SFATimeSeries( 300)
 
         self._lock.release()
   
@@ -296,8 +183,7 @@ class SFAClient( threading.Thread):
         fast_iteration = 0
         
         while not self._exit_requested:  # loop until we're told not to
-            # Start with something easy: virtual disk statistics
-        
+            
             while (time.time() < next_fast_poll_time):
                 time.sleep(self._fast_poll_interval / 10) # wait for the poll time to come up
             
@@ -316,17 +202,17 @@ class SFAClient( threading.Thread):
                     # Note: we actually get back 2 element lists - one element
                     # for each controller in the couplet.  In theory, one of those
                     # elements should always be 0.
-                    self._vd_read_iops[index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                    self._vd_write_iops[index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                    self._vd_transfer_bytes[index].append(
+                    self._time_series['vd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                    self._time_series['vd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                    self._time_series['vd_transfer_bytes'][index].append(
                             (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
                     # Note: converted to bytes
 
-                    self._vd_forwarded_bytes[index].append(
+                    self._time_series['vd_forwarded_bytes'][index].append(
                             (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
                     # Note: converted to bytes 
 
-                    self._vd_forwarded_iops[index].append(
+                    self._time_series['vd_forwarded_iops'][index].append(
                             stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
             finally:
                 self._lock.release()
@@ -344,9 +230,9 @@ class SFAClient( threading.Thread):
                     # Note: we actually get back 2 element lists - one element
                     # for each controller in the couplet.  In theory, one of those
                     # elements should always be 0.
-                    self._dd_read_iops[index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                    self._dd_write_iops[index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                    self._dd_transfer_bytes[index].append(
+                    self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                    self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                    self._time_series['dd_transfer_bytes'][index].append(
                             (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
                     # Note: converted to bytes
 
@@ -363,7 +249,6 @@ class SFAClient( threading.Thread):
                 # TODO: implement slow interval stuff
                 pass
                 
-        
         # end of main while loop
     # end of run() 
             

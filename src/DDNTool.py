@@ -19,7 +19,7 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 ###### Remote Debugging using winpdb #######
 import rpdb2
-rpdb2.start_embedded_debugger('xmr')
+#rpdb2.start_embedded_debugger('xmr')
 # xmr is the session password - make sure port 51000 is open
 # Note: calling stat_embedded_debuger will cause the program execution to
 # freeze until the debugger actually connects to it.
@@ -33,20 +33,14 @@ DEFAULT_CONF_FILE="./ddntool.conf"  # config file to use if not specified on the
 # the shutdown function can access it to shut the threads down
 sfa_clients=[]
 
-class Thread_Shutdown_Exception(Exception):
-    '''
-    An exception for indicating a problem shutting
-    down a background thread.
-    '''
-    pass # Don't need anything other than what's in the base class
 
 def clean_shutdown():
     '''
     Shut down the background thread(s) cleanly
 
-    Returns nothing, but does not return until the threads have stopped.
-    Raises a Thread_Shutdown_Exception exception if a thread fails
-    to stop in a reasonable amount of time.
+    Returns nothing, but does not normally return until the threads
+    have stopped.  If the thread doesn't stop within the timeout time,
+    it prints an error message.
     '''
 
     # request each client to stop (using the option to
@@ -58,7 +52,7 @@ def clean_shutdown():
     # Send the thread stop request again, this time waiting
     # (hopefully not long) for the threads to exit
     for c in sfa_clients:
-        if c.stop_thread( True, 10) == False:
+        if c.stop_thread( True, 15) == False:
             print "Failed to stop background thread for client %s"%c.get_host_name()
 
 
@@ -129,11 +123,11 @@ def main_func():
                 vd_nums = client.get_vd_nums()
                 for vd_num in vd_nums:
                     try:
-                        read_iops = client.get_vd_read_iops( vd_num, 60)
-                        write_iops = client.get_vd_write_iops( vd_num, 60)
-                        bandwidth = client.get_vd_transfer_bw( vd_num, 60)
-                        fw_bandwidth = client.get_vd_forwarded_bw( vd_num, 60)
-                        fw_iops = client.get_vd_forwarded_iops( vd_num, 60)
+                        read_iops = client.get_time_series_average( 'vd_read_iops', vd_num, 60)
+                        write_iops = client.get_time_series_average( 'vd_write_iops', vd_num, 60)
+                        bandwidth = client.get_time_series_average( 'vd_transfer_bytes', vd_num, 60)
+                        fw_bandwidth = client.get_time_series_average( 'vd_forwarded_bytes', vd_num, 60)
+                        fw_iops = client.get_time_series_average( 'vd_forwarded_iops', vd_num, 60)
                         db.update_vd_table(client.get_host_name(), vd_num, bandwidth[0],
                                            read_iops[0], write_iops[0], fw_bandwidth[0],
                                            fw_iops[0])
@@ -145,9 +139,9 @@ def main_func():
                 dd_nums = client.get_dd_nums()
                 for dd_num in dd_nums:
                     try:
-                        read_iops = client.get_dd_read_iops( dd_num, 60)
-                        write_iops = client.get_dd_write_iops( dd_num, 60)
-                        bandwidth = client.get_dd_transfer_bw( dd_num, 60)
+                        read_iops = client.get_time_series_average( 'dd_read_iops', dd_num, 60)
+                        write_iops = client.get_time_series_average( 'dd_write_iops', dd_num, 60)
+                        bandwidth = client.get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
                         db.update_dd_table(client.get_host_name(), dd_num, bandwidth[0],
                                            read_iops[0], write_iops[0])
                     except EmptyTimeSeriesException:

@@ -7,6 +7,7 @@ Created on Apr 12, 2013
 import unittest
 import time
 from SFATimeSeries import SFATimeSeries
+from SFATimeSeries import EmptyTimeSeriesException
 
 # Constants used for building the series data
 #VALUE_START=1       # Starting value when adding data to the series
@@ -97,17 +98,16 @@ class SFATimeSeries_Test( unittest.TestCase):
                                 msg="Actual timespan for the Average() function too far from the requested timespan." )
         
         self.assertAlmostEqual(result[0], SERIES_RATE, delta=SERIES_RATE*.005)  # accurate to 0.5%
+        # NOTE: the 'delta' argument is new in python 2.7. Running with anything earlier
+        # will result in the test failing.
         
-    # verify the average() function works even when there's only 1 value
+    # verify the average() raises an exception when there's only 0 or 1 value
     def testSingleValueAverage(self):
         local_series = SFATimeSeries()
+        self.assertRaises( EmptyTimeSeriesException, local_series.average, 1)
         VALUE = 25
         local_series.append( VALUE)
-        result = local_series.average(100)
-        self.assertEqual(VALUE, result[0],
-                         "Single value average() test returned %f instead of %f"%(result[0], VALUE))
-        self.assertEqual(0, result[1],
-                         "Single value average() test returnd a time span of %f instead of 0"%result[1])
+        self.assertRaises( EmptyTimeSeriesException, local_series.average, 1)
         
     # verify the average() function works with very short time spans
     # This is a regression test.  The idea is to pass a small enough span to average()

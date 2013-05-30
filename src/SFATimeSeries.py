@@ -64,16 +64,10 @@ class SFATimeSeries( object):
         4 seconds.)
         '''
        
-        # Sanity check - don't call this function on an empty series!
-        if len(self._series) == 0:
+        # Sanity check - we need at least to values to compute a meaningful average
+        if len(self._series) < 2:
             raise EmptyTimeSeriesException()
 
-        # Sanity check - if we only have one value in the series, just return
-        # that value (and a time span of 0)
-        # TODO: how to we handle an empty time series? Return 0? Throw an exception?
-        if len(self._series) == 1:
-            return (self._series[0][0], 0.0)
-        
         # Normal case: find the value who's time stamp is closest to what we want
         # and compute the average using it and the most recent value
         last_index = len(self._series) - 1

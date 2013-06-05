@@ -19,7 +19,7 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 ###### Remote Debugging using winpdb #######
 import rpdb2
-#rpdb2.start_embedded_debugger('xmr')
+rpdb2.start_embedded_debugger('xmr')
 # xmr is the session password - make sure port 51000 is open
 # Note: calling stat_embedded_debuger will cause the program execution to
 # freeze until the debugger actually connects to it.
@@ -87,6 +87,11 @@ def main_func():
     config.read(args.conf_file)
     
     try:
+        # Get the polling intervals from the config file
+        fast_poll_interval = config.getfloat('polling', 'fast_poll_interval')
+        med_poll_multiple = config.getint('polling', 'med_poll_multiple')
+        slow_poll_multiple = config.getint('polling', 'slow_poll_multiple')
+
         # Connect to the DDN hardware
         sfa_user = config.get('ddn_hardware', 'sfa_user')
         sfa_password = config.get('ddn_hardware', 'sfa_password')
@@ -95,16 +100,28 @@ def main_func():
             client = SFAClient.SFAClient( host, sfa_user, sfa_password)
             sfa_clients.append( client)
 
-        # Wait for the hosts to connect
-        MAX_CONNECT_WAIT=5  # in seconds
+        # Wait for the hosts to connect and complete at least one
+        # pass through their main loops
+        print "Waiting for clients to connect and initialize"
+        MAX_CLIENT_WAIT=20  # in seconds
+        # Note:  Turn this *way* down once we get a faster API from DDN
+
         for client in sfa_clients:
-            end_time = time.time() + MAX_CONNECT_WAIT
-            while (not client.is_connected()) and (time.time() < end_time):
+            end_time = time.time() + MAX_CLIENT_WAIT
+            while (not client.is_ready()) and (time.time() < end_time):
                 time.sleep(0.25)
-            if not client.is_connected():
-                print "Failed to connect to SFA Host %s"%host
-     
+            if not client.is_ready():
+                if not client.is_connected():
+                    print "Failed to connect to SFA Host %s"%client.get_host_name()
+                else:
+                    print "Connected to SFA Host %s, could not complete initialization steps."%client.get_host_name()
+                client.stop_thread( False)
+                sfa_clients.remove( client)
+            else:
+                print "%s ready"%client.get_host_name()
+    
         # Connect to the database
+        print "Connecting to the database..."
         db_user = config.get('database', 'db_user')
         db_password = config.get('database', 'db_password')
         db_host = config.get('database', 'db_host')
@@ -112,13 +129,20 @@ def main_func():
         db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, args.init_db)
         db.verify_main_table( sfa_hosts)
 
-        # install the signal handler
-        #signal.signal( signal.SIGINT, sigint_handler)
-
         # loop forever polling the clients and updating the database
         print "Entering main loop.  Ctrl-C to exit."
+        next_fast_poll_time = 0
+        fast_iteration = -1
+
         while True:
-            time.sleep(5) 
+
+            while (time.time() < next_fast_poll_time):
+                time.sleep(fast_poll_interval / 10) # wait for the poll time to come up
+
+            next_fast_poll_time = time.time() + fast_poll_interval
+            fast_iteration += 1
+
+            ############# Fast Interval Stuff #####################
             for client in sfa_clients:
                 vd_nums = client.get_vd_nums()
                 for vd_num in vd_nums:
@@ -147,6 +171,21 @@ def main_func():
                     except EmptyTimeSeriesException:
                         print "Skipping empty time series for host %s, disk drive %d"% \
                               (client.get_host_name(), dd_num)
+           
+            ############# Medium Interval Stuff #####################
+            if (fast_iteration % med_poll_multiple == 0):
+                for client in sfa_clients:
+                    vd_nums = client.get_vd_nums()
+                    for vd_num in vd_nums:
+                        read_request_sizes = client.get_io_read_request_sizes( vd_num)
+                        db.update_read_request_size_table( client.get_host_name(), vd_num, read_request_sizes)
+
+
+            ############# Slow Interval Stuff #######################
+            if (fast_iteration % slow_poll_multiple == 0):
+                # TODO: slow interval stuff
+                pass
+ 
     except KeyboardInterrupt:
         # Perfectly normal.  Ctrl-C is how we expect to exit
         pass

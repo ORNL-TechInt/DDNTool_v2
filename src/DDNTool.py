@@ -19,7 +19,7 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 ###### Remote Debugging using winpdb #######
 import rpdb2
-rpdb2.start_embedded_debugger('xmr')
+#rpdb2.start_embedded_debugger('xmr')
 # xmr is the session password - make sure port 51000 is open
 # Note: calling stat_embedded_debuger will cause the program execution to
 # freeze until the debugger actually connects to it.
@@ -177,8 +177,14 @@ def main_func():
                 for client in sfa_clients:
                     vd_nums = client.get_vd_nums()
                     for vd_num in vd_nums:
-                        read_request_sizes = client.get_io_read_request_sizes( vd_num)
-                        db.update_read_request_size_table( client.get_host_name(), vd_num, read_request_sizes)
+                        request_values = client.get_io_read_request_sizes( vd_num)
+                        db.update_request_size_table( client.get_host_name(), vd_num, True, request_values)
+                        request_values = client.get_io_write_request_sizes( vd_num)
+                        db.update_request_size_table( client.get_host_name(), vd_num, False, request_values)
+                        request_values = client.get_io_read_latencies( vd_num)
+                        db.update_request_latency_table( client.get_host_name(), vd_num, True, request_values)
+                        request_values = client.get_io_write_latencies( vd_num)
+                        db.update_request_latency_table( client.get_host_name(), vd_num, False, request_values)
 
 
             ############# Slow Interval Stuff #######################

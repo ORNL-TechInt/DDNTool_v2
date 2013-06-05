@@ -16,10 +16,61 @@ TABLE_NAMES = {
              "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays",
              "READ_REQUEST_SIZE_TABLE_NAME" : u"ReadRequestSizes",
-             "READ_REQUEST_LATENCY_TABLE_NAME" : u"ReadRequestLatencies"
+             "READ_REQUEST_LATENCY_TABLE_NAME" : u"ReadRequestLatencies",
+             "WRITE_REQUEST_SIZE_TABLE_NAME" : u"WriteRequestSizes",
+             "WRITE_REQUEST_LATENCY_TABLE_NAME" : u"WriteRequestLatencies"
+
 #define USER_TABLE_NAME             "Users"
  }
 #
+
+# Partially complete SQL statements for creating the request size
+# latency tables
+PARTIAL_LATENCY_TABLE_DEF = \
+    "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+    "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
+    "16ms INT UNSIGNED NOT NULL, " \
+    "32ms  INT UNSIGNED NOT NULL, " \
+    "64ms INT UNSIGNED NOT NULL, " \
+    "128ms INT UNSIGNED NOT NULL, " \
+    "256ms INT UNSIGNED NOT NULL, " \
+    "512ms INT UNSIGNED NOT NULL, " \
+    "1s INT UNSIGNED NOT NULL, " \
+    "2s INT UNSIGNED NOT NULL, " \
+    "4s INT UNSIGNED NOT NULL, " \
+    "8s INT UNSIGNED NOT NULL, " \
+    "16s INT UNSIGNED NOT NULL, " \
+    "Longer_Than_16s INT UNSIGNED NOT NULL, " \
+    "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+    "INDEX( Hostname), INDEX( Disk_Num) )" \
+    "ENGINE=HEAP" \
+    ";"
+
+PARTIAL_SIZE_TABLE_DEF = \
+    "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+    "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
+    "4KiB INT UNSIGNED NOT NULL, " \
+    "8KiB INT UNSIGNED NOT NULL, " \
+    "16KiB INT UNSIGNED NOT NULL, " \
+    "32KiB INT UNSIGNED NOT NULL, " \
+    "64iB INT UNSIGNED NOT NULL, " \
+    "128KiB INT UNSIGNED NOT NULL, " \
+    "256KiB INT UNSIGNED NOT NULL, " \
+    "512KiB INT UNSIGNED NOT NULL, " \
+    "1MiB INT UNSIGNED NOT NULL, " \
+    "2MiB INT UNSIGNED NOT NULL, " \
+    "4MiB INT UNSIGNED NOT NULL, " \
+    "Larger_Than_4MiB INT UNSIGNED NOT NULL, " \
+    "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+    "INDEX( Hostname), INDEX( Disk_Num) )" \
+    "ENGINE=HEAP" \
+    ";"
+
+# Note: We're hard-coding the size and latency buckets rather than trying to get
+# them from the DDN API  (mainly because you can't have characters like <= in
+# column names).  When SFAClient objects start up, they verify that the size
+# buckets that the DDN controllers are using match what we expect.  If that
+# ever changes, we'll obviously have to change this code, too.
 
 
 class SFADatabase(object):
@@ -125,15 +176,21 @@ class SFADatabase(object):
                                         str(read_iops), str(write_iops)))
         cursor.close()
 
-    def update_read_request_size_table( self, sfa_client_name, vd_num, size_buckets):
+    def update_request_size_table( self, sfa_client_name, vd_num, read_table, size_buckets):
         '''
-        Update the read request size data for one virtual disk on one client.  size_buckets
-        is a list containing the number of requests for each size and is expected to
-        match the size values listed in the column headings.
+        Update the read or write request size data (depending on the value of the read_table
+        boolean) for one virtual disk on one client.  size_buckets is a list containing the
+        number of requests for each size and is expected to match the size values listed in
+        the column headings.
         '''
         
-        replace_query = "REPLACE INTO " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + \
-                " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
+        replace_query = "REPLACE INTO "
+        if read_table:
+            replace_query += TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"]
+        else:    
+            replace_query += TABLE_NAMES["WRITE_REQUEST_SIZE_TABLE_NAME"]
+
+        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
         
         for i in range(len(size_buckets)):
             replace_query += ", %s"
@@ -149,15 +206,21 @@ class SFADatabase(object):
         cursor.execute( replace_query, values)
         cursor.close()
 
-    def update_read_request_latency_table( self, sfa_client_name, vd_num, latency_buckets):
+    def update_request_latency_table( self, sfa_client_name, vd_num, read_table, latency_buckets):
         '''
-        Update the read request size data for one virtual disk on one client.  latency_buckets
-        is a list containing the number of requests that were handled in each time frame
-        and is expected to match the latency values listed in the column headings.
+        Update the read or write request size data (depending on the value of the read_table
+        boolean) for one virtual disk on one client.  latency_buckets is a list containing
+        the number of requests that were handled in each time frame and is expected to match
+        the latency values listed in the column headings.
         '''
 
-        replace_query = "REPLACE INTO " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + \
-                " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+        replace_query = "REPLACE INTO "
+        if read_table:
+            replace_query += TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"]
+        else:
+            replace_query += TABLE_NAMES["WRITE_REQUEST_LATENCY_TABLE_NAME"]
+
+        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
 
         for i in range(len(latency_buckets)):
             replace_query += ", %s"
@@ -199,7 +262,8 @@ class SFADatabase(object):
         self._new_dd_table()
         self._new_read_request_size_table()
         self._new_read_request_latency_table()
-    
+        self._new_write_request_size_table()
+        self._new_write_request_latency_table() 
     
     def _new_main_table(self):
         '''
@@ -265,36 +329,27 @@ class SFADatabase(object):
         cursor.close()
 
 
-    # Note: We're hard-coding the size buckets rather than trying to get them from
-    # the DDN API  (mainly because you can't have characters like <= in column names).
-    # When the SFAClient object starts up, we verify that the size buckets that the DDN
-    # controller is using matches what we expect.  If it ever changes, we'll obviously
-    # have to change this code, too.
     def _new_read_request_size_table( self):
         '''
         Create the db table that holds read request size information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + " "  \
-        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
-        "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
-        "4KiB INT UNSIGNED NOT NULL, " \
-        "8KiB INT UNSIGNED NOT NULL, " \
-        "16KiB INT UNSIGNED NOT NULL, " \
-        "32KiB INT UNSIGNED NOT NULL, " \
-        "64iB INT UNSIGNED NOT NULL, " \
-        "128KiB INT UNSIGNED NOT NULL, " \
-        "256KiB INT UNSIGNED NOT NULL, " \
-        "512KiB INT UNSIGNED NOT NULL, " \
-        "1MiB INT UNSIGNED NOT NULL, " \
-        "2MiB INT UNSIGNED NOT NULL, " \
-        "4MiB INT UNSIGNED NOT NULL, " \
-        "Larger_Than_4MiB INT UNSIGNED NOT NULL, " \
-        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
-        "INDEX( Hostname), INDEX( Disk_Num) )" \
-        "ENGINE=HEAP" \
-        ";"
+        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + \
+        " " + PARTIAL_SIZE_TABLE_DEF
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( table_def)
+        cursor.close()
+
+    def _new_write_request_size_table( self):
+        '''
+        Create the db table that holds write request size information.
+        '''
+        
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["WRITE_REQUEST_SIZE_TABLE_NAME"] + \
+        " " + PARTIAL_SIZE_TABLE_DEF
 
         cursor = self._dbcon.cursor()
         cursor.execute( table_def)
@@ -306,26 +361,23 @@ class SFADatabase(object):
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + " "  \
-        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
-        "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
-        "16ms INT UNSIGNED NOT NULL, " \
-        "32ms  INT UNSIGNED NOT NULL, " \
-        "64ms INT UNSIGNED NOT NULL, " \
-        "128ms INT UNSIGNED NOT NULL, " \
-        "256ms INT UNSIGNED NOT NULL, " \
-        "512ms INT UNSIGNED NOT NULL, " \
-        "1s INT UNSIGNED NOT NULL, " \
-        "2s INT UNSIGNED NOT NULL, " \
-        "4s INT UNSIGNED NOT NULL, " \
-        "8s INT UNSIGNED NOT NULL, " \
-        "16s INT UNSIGNED NOT NULL, " \
-        "Longer_Than_16s INT UNSIGNED NOT NULL, " \
-        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
-        "INDEX( Hostname), INDEX( Disk_Num) )" \
-        "ENGINE=HEAP" \
-        ";"
+        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_LATENCY_TABLE_DEF
 
         cursor = self._dbcon.cursor()
         cursor.execute( table_def)
         cursor.close()
+
+    def _new_write_request_latency_table( self):
+        '''
+        Create the db table that holds write request latency information.
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_LATENCY_TABLE_DEF
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( table_def)
+        cursor.close()
+

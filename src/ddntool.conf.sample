@@ -1,0 +1,28 @@
+# A sample config file for DDNTool_v2
+#
+# Lines starting with '#' or ';' are comments
+# A ';' in the middle of a line also indicates the rest of the line
+# is a comment.  Depending on your version of Python, you might be
+# about to use '#' for this, too, but not necessarily.
+
+[database]
+# Replace these with legitimate values
+db_host=localhost
+db_name=my_database
+db_user=my_db_user
+db_password=my_db_pwd
+
+[polling]
+fast_poll_interval = 2.0 ; in seconds
+med_poll_multiple = 15   ; multiples of _fast_poll_interval
+slow_poll_multiple = 60  ; multiples of _fast_poll_interval
+# values of 2.0, 15 & 60 will result in polling every 2 seconds,
+# 30 seconds and 2 minutes for fast, medium and slow, respectively
+
+
+[ddn_hardware]
+sfa_hosts=sultan-12k1, sultan-12k2
+#sfa_hosts=sultan-12k1
+sfa_user=user
+sfa_password=user
+

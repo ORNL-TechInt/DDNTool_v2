@@ -11,7 +11,14 @@ from SFATimeSeries import SFATimeSeries
 
 from ddn.sfa.api import *
 
-    
+class UnexpectedClientDataException( Exception):
+    '''
+    Used when the DDN API sent back data that we weren't expecting
+    or don't understand.  This is sort of one step up from an
+    assert.  Hopefully, we won't use it too often.
+    '''
+    pass    # don't need anything besides what's already in the base class
+
     
 class SFAClient( threading.Thread):
     '''
@@ -25,7 +32,6 @@ class SFAClient( threading.Thread):
         '''
         Constructor
         '''
-        #TODO: Implement me!
         threading.Thread.__init__( self, name=address)
         
         self._lock = threading.Lock()
@@ -37,6 +43,11 @@ class SFAClient( threading.Thread):
         
         self._connected = False;
         self._exit_requested = False;
+
+        self._first_pass_complete = False;
+        # The values for most everything are empty until the background thread
+        # completes a pass through its main loop. 
+
         
         # How often we poll the DDN hardware - some data needs to be polled
         # faster than others
@@ -54,8 +65,19 @@ class SFAClient( threading.Thread):
         # (We use an inner dictionary instead of a list so the device
         # numbers don't have to be sequential.)
         self._time_series = {}
-                
+  
+        # Virtual Disk Statistics objects
+        # We keep copies of each SFAVirtualDiskStatistics object (mainly for
+        # the I/O latency and request size arrays.
+        # Dictionary maps the virtual disk index to its corresponding object
+        self._vd_stats = {}
+
         self.start()    # kick off the background thread
+        # We return now, but it's a good idea to wait until is_ready()
+        # returns true before attempting to do anything with this object.
+        # (The getter functions have undefined (but probably bad) behavior
+        # if called before is_ready() returns true.
+
         
     
     def is_connected(self):
@@ -64,6 +86,19 @@ class SFAClient( threading.Thread):
         to communicate with it.
         '''
         return self._connected
+
+    def is_ready(self):
+        '''
+        Returns True if the instance has enough data for the getter functions to respond
+        with meaningful data.  Calling a getter when this function returns false will
+        result in undefined (but probably bad) behavior.
+        
+        Note: The time series average function may still throw an exception even if
+        this function returns true, since time series need at least 2 data points
+        before they can compute an average.
+        '''
+        return self._connected and self._first_pass_complete
+
     
     def stop_thread(self, wait = False, timeout = None):
         '''
@@ -141,6 +176,88 @@ class SFAClient( threading.Thread):
         return average
 
 
+    def get_io_read_latencies( self, vd_num):
+        '''
+        Returns list of I/O read latency values for the specified virtual disk
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            latencies = self._vd_stats[vd_num].ReadIOLatencyBuckets
+        finally:
+            self._lock.release()
+        
+        return latencies
+
+    def get_io_write_latencies( self, vd_num):
+        '''
+        Returns list of I/O write latency values for the specified virtual disk
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            latencies = self._vd_stats[vd_num].WriteIOLatencyBuckets
+        finally:
+            self._lock.release()
+
+        return latencies
+
+    def get_io_read_request_sizes( self, vd_num):
+        '''
+        Returns list of I/O request sizes for the specified virtual disk
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            sizes = self._vd_stats[vd_num].ReadIOSizeBuckets
+        finally:
+            self._lock.release()
+
+        return sizes
+
+    def get_io_write_request_sizes( self, vd_num):
+        '''
+        Returns list of I/O write request sizes for the specified virtual disk
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            sizes = self._vd_stats[vd_num].WriteIOSizeBuckets
+        finally:
+            self._lock.release()
+
+        return sizes
+
+
+    def get_io_latency_labels( self):
+        '''
+        Returns the list of labels for the latency values
+        '''
+
+        # although the lables don't change much, we still acquire the lock,
+        # mainly to avoid issues with an empty self._vd_stats at startup
+        self._lock.acquire()
+        # We periodically verify that all virtual disks have identical latency labels,
+        # so just grab the labels from the first object in the dictionary
+        try:
+            labels = self._vd_stats[self._vd_stats.keys()[0]].IOLatencyIndexLabels
+        finally:
+            self._lock.release()
+        return labels
+
+    def get_io_size_labels( self):
+        '''
+        Returns the list of labels for the request size values
+        '''
+
+        self._lock.acquire()
+        try:
+            labels = self._vd_stats[self._vd_stats.keys()[0]].IOSizeIndexLabels
+        finally:
+            self._lock.release()
+        return labels
+
+
     def run(self):
         '''
         Main body of the background thread:  polls the SFA, post-processes the data and makes the results
@@ -159,6 +276,7 @@ class SFAClient( threading.Thread):
         self._time_series['vd_forwarded_iops'] = { }
         for stats in vd_stats:
             index = stats.Index
+            self._vd_stats[index] = stats
 
             #300 entries is 10 minutes of data at 2 second sample rate
             self._time_series['vd_read_iops'][index] = SFATimeSeries( 300) 
@@ -178,9 +296,32 @@ class SFAClient( threading.Thread):
             self._time_series['dd_transfer_bytes'][index] = SFATimeSeries( 300)
 
         self._lock.release()
+
+        # verify the IO request size and latency labels are what we expect (and have
+        # hard coded into the database column headings)
+
+        expected_size_labels = ['IO Size <=4KiB', 'IO Size <=8KiB', 'IO Size <=16KiB',
+                'IO Size <=32KiB', 'IO Size <=64KiB', 'IO Size <=128KiB',
+                'IO Size <=256KiB', 'IO Size <=512KiB', 'IO Size <=1MiB',
+                'IO Size <=2MiB', 'IO Size <=4MiB', 'IO Size >4MiB']
+        expected_latency_labels = ['Latency Counts <=16ms', 'Latency Counts <=32ms',
+                'Latency Counts <=64ms', 'Latency Counts <=128ms', 'Latency Counts <=256ms',
+                'Latency Counts <=512ms','Latency Counts <=1s', 'Latency Counts <=2s',
+                'Latency Counts <=4s', 'Latency Counts <=8s', 'Latency Counts <=16s',
+                'Latency Counts >16s']
+
+        for stats in vd_stats:
+            if stats.IOSizeIndexLabels != expected_size_labels:
+                raise UnexpectedClientDataException(
+                        "Unexpected IO size index labels for %s virtual disk %d" % \
+                                (self.get_host_name(), stats.Index))
+            if stats.IOLatencyIndexLabels != expected_latency_labels:
+                raise UnexpectedClientDataException(
+                        "Unexpected IO latency index labels for %s virtual disk %d" % \
+                                (self.get_host_name(), stats.Index))
   
         next_fast_poll_time = 0
-        fast_iteration = 0
+        fast_iteration = -1
         
         while not self._exit_requested:  # loop until we're told not to
             
@@ -194,10 +335,16 @@ class SFAClient( threading.Thread):
 
             ##Virtual Disk Statistics 
             vd_stats = SFAVirtualDiskStatistics.getAll()
+            # Note: vd_stats is referred to down in the medium and slow interval sections, too
             try:
                 self._lock.acquire()  # need to lock the mutex before we modify the data series
+                self._vd_stats = { } # erase the old _vd_stats dictionary
                 for stats in vd_stats:
                     index = stats.Index
+
+                    # Save the entire object (mainly for its I/O latency and request
+                    # size arrays
+                    self._vd_stats[index] = stats
                     
                     # Note: we actually get back 2 element lists - one element
                     # for each controller in the couplet.  In theory, one of those
@@ -241,14 +388,15 @@ class SFAClient( threading.Thread):
             
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):
-                # TODO: implement medium interval stuff
+                # TODO: medium interval stuff
                 pass
             
             ############# Slow Interval Stuff #######################
             if (fast_iteration % self._slow_poll_multiple == 0):
-                # TODO: implement slow interval stuff
+                # TODO: slow interval stuff
                 pass
-                
+
+            self._first_pass_complete = True    
         # end of main while loop
     # end of run() 
             

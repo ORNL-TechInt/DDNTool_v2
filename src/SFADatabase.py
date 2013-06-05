@@ -14,7 +14,9 @@ TABLE_NAMES = {
              "MAIN_TABLE_NAME" : u"Main",
              "DISK_TABLE_NAME" : u"Disk",
              "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
-             "TIER_DELAY_TABLE_NAME" : u"TierDelays"
+             "TIER_DELAY_TABLE_NAME" : u"TierDelays",
+             "READ_REQUEST_SIZE_TABLE_NAME" : u"ReadRequestSizes",
+             "READ_REQUEST_LATENCY_TABLE_NAME" : u"ReadRequestLatencies"
 #define USER_TABLE_NAME             "Users"
  }
 #
@@ -123,10 +125,56 @@ class SFADatabase(object):
                                         str(read_iops), str(write_iops)))
         cursor.close()
 
+    def update_read_request_size_table( self, sfa_client_name, vd_num, size_buckets):
+        '''
+        Update the read request size data for one virtual disk on one client.  size_buckets
+        is a list containing the number of requests for each size and is expected to
+        match the size values listed in the column headings.
+        '''
+        
+        replace_query = "REPLACE INTO " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + \
+                " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
+        
+        for i in range(len(size_buckets)):
+            replace_query += ", %s"
+        replace_query += ");"
+       
+        values = (sfa_client_name, str(vd_num))
+        for size in size_buckets:
+                values += (str(size), )
+        # Note: it seems like I shouldn't have to convert all the sizes to strings manually,
+        # but I get strange mysql errors if I don't...
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( replace_query, values)
+        cursor.close()
+
+    def update_read_request_latency_table( self, sfa_client_name, vd_num, latency_buckets):
+        '''
+        Update the read request size data for one virtual disk on one client.  latency_buckets
+        is a list containing the number of requests that were handled in each time frame
+        and is expected to match the latency values listed in the column headings.
+        '''
+
+        replace_query = "REPLACE INTO " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + \
+                " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+
+        for i in range(len(latency_buckets)):
+            replace_query += ", %s"
+        replace_query += ");"
+
+        values = (sfa_client_name, str(vd_num))
+        for latency in latency_buckets:
+                values += (str(latency), )
+        # Note: it seems like I shouldn't have to convert all the values to strings manually,
+        # but I get strange mysql errors if I don't...
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( replace_query, values)
+        cursor.close()
+
  
     def _create_schema(self):
-        # at the moment, we only have one table.  However, I expect that to change quickly
-        
         # Drop the old tables (since we're not storing long-term data, it's easier
         # to drop the old tables and re-create them than it is to use ALTER TABLE
         # statements.
@@ -149,6 +197,8 @@ class SFADatabase(object):
         self._new_main_table()
         self._new_vd_table()
         self._new_dd_table()
+        self._new_read_request_size_table()
+        self._new_read_request_latency_table()
     
     
     def _new_main_table(self):
@@ -159,14 +209,14 @@ class SFADatabase(object):
         
         table_def = \
         "CREATE TABLE " + TABLE_NAMES["MAIN_TABLE_NAME"] + \
-       "(Hostname VARCHAR(75) KEY, LastUpdate TIMESTAMP, DDN_Name VARCHAR( 75)," + \
-        "DDN_Partner_Name VARCHAR( 75), Unit_Number TINYINT UNSIGNED, Alarm BOOL," + \
-        "Time_Since_Restart VARCHAR( 30), Total_Uptime VARCHAR( 30)," + \
-        "Transfer_BW FLOAT, Read_IOPS FLOAT, Write_IOPS FLOAT, Rebuild_BW FLOAT, Verify_BW FLOAT," + \
-        "Cache_Size INT UNSIGNED, Cache_Error BOOL, WC_Disabled BOOL," + \
-        "WC_Disable_Reason VARCHAR( 75), Disk_Failures SMALLINT UNSIGNED," + \
-        "INDEX( Hostname))" + \
-        "ENGINE=HEAP" + \
+        "(Hostname VARCHAR(75) KEY, LastUpdate TIMESTAMP, DDN_Name VARCHAR( 75)," \
+        "DDN_Partner_Name VARCHAR( 75), Unit_Number TINYINT UNSIGNED, Alarm BOOL," \
+        "Time_Since_Restart VARCHAR( 30), Total_Uptime VARCHAR( 30)," \
+        "Transfer_BW FLOAT, Read_IOPS FLOAT, Write_IOPS FLOAT, Rebuild_BW FLOAT, Verify_BW FLOAT," \
+        "Cache_Size INT UNSIGNED, Cache_Error BOOL, WC_Disabled BOOL," \
+        "WC_Disable_Reason VARCHAR( 75), Disk_Failures SMALLINT UNSIGNED," \
+        "INDEX( Hostname))" \
+        "ENGINE=HEAP" \
         ";"
 
         cursor = self._dbcon.cursor()
@@ -186,7 +236,7 @@ class SFADatabase(object):
         "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
         "INDEX( Hostname), INDEX( Disk_Num) )"  \
-        "ENGINE=HEAP"  \
+        "ENGINE=HEAP" \
         ";"
 
         cursor = self._dbcon.cursor()
@@ -207,10 +257,75 @@ class SFADatabase(object):
         "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
         "INDEX( Hostname), INDEX( Disk_Num) )"  \
-        "ENGINE=HEAP"  \
+        "ENGINE=HEAP" \
         ";"
 
         cursor = self._dbcon.cursor()
         cursor.execute( table_def)
         cursor.close()
-        
+
+
+    # Note: We're hard-coding the size buckets rather than trying to get them from
+    # the DDN API  (mainly because you can't have characters like <= in column names).
+    # When the SFAClient object starts up, we verify that the size buckets that the DDN
+    # controller is using matches what we expect.  If it ever changes, we'll obviously
+    # have to change this code, too.
+    def _new_read_request_size_table( self):
+        '''
+        Create the db table that holds read request size information.
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + " "  \
+        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+        "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
+        "4KiB INT UNSIGNED NOT NULL, " \
+        "8KiB INT UNSIGNED NOT NULL, " \
+        "16KiB INT UNSIGNED NOT NULL, " \
+        "32KiB INT UNSIGNED NOT NULL, " \
+        "64iB INT UNSIGNED NOT NULL, " \
+        "128KiB INT UNSIGNED NOT NULL, " \
+        "256KiB INT UNSIGNED NOT NULL, " \
+        "512KiB INT UNSIGNED NOT NULL, " \
+        "1MiB INT UNSIGNED NOT NULL, " \
+        "2MiB INT UNSIGNED NOT NULL, " \
+        "4MiB INT UNSIGNED NOT NULL, " \
+        "Larger_Than_4MiB INT UNSIGNED NOT NULL, " \
+        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+        "INDEX( Hostname), INDEX( Disk_Num) )" \
+        "ENGINE=HEAP" \
+        ";"
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( table_def)
+        cursor.close()
+
+    def _new_read_request_latency_table( self):
+        '''
+        Create the db table that holds read request latency information.
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + " "  \
+        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+        "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
+        "16ms INT UNSIGNED NOT NULL, " \
+        "32ms  INT UNSIGNED NOT NULL, " \
+        "64ms INT UNSIGNED NOT NULL, " \
+        "128ms INT UNSIGNED NOT NULL, " \
+        "256ms INT UNSIGNED NOT NULL, " \
+        "512ms INT UNSIGNED NOT NULL, " \
+        "1s INT UNSIGNED NOT NULL, " \
+        "2s INT UNSIGNED NOT NULL, " \
+        "4s INT UNSIGNED NOT NULL, " \
+        "8s INT UNSIGNED NOT NULL, " \
+        "16s INT UNSIGNED NOT NULL, " \
+        "Longer_Than_16s INT UNSIGNED NOT NULL, " \
+        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+        "INDEX( Hostname), INDEX( Disk_Num) )" \
+        "ENGINE=HEAP" \
+        ";"
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( table_def)
+        cursor.close()

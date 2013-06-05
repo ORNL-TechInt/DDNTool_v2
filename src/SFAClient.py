@@ -335,7 +335,6 @@ class SFAClient( threading.Thread):
 
             ##Virtual Disk Statistics 
             vd_stats = SFAVirtualDiskStatistics.getAll()
-            # Note: vd_stats is referred to down in the medium and slow interval sections, too
             try:
                 self._lock.acquire()  # need to lock the mutex before we modify the data series
                 self._vd_stats = { } # erase the old _vd_stats dictionary
@@ -388,12 +387,12 @@ class SFAClient( threading.Thread):
             
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):
-                # TODO: medium interval stuff
+                # TODO: implement medium interval stuff
                 pass
             
             ############# Slow Interval Stuff #######################
             if (fast_iteration % self._slow_poll_multiple == 0):
-                # TODO: slow interval stuff
+                # TODO: implement slow interval stuff
                 pass
 
             self._first_pass_complete = True    

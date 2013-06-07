@@ -304,21 +304,37 @@ class SFAClient( threading.Thread):
                 'IO Size <=32KiB', 'IO Size <=64KiB', 'IO Size <=128KiB',
                 'IO Size <=256KiB', 'IO Size <=512KiB', 'IO Size <=1MiB',
                 'IO Size <=2MiB', 'IO Size <=4MiB', 'IO Size >4MiB']
-        expected_latency_labels = ['Latency Counts <=16ms', 'Latency Counts <=32ms',
+        expected_vd_latency_labels = ['Latency Counts <=16ms', 'Latency Counts <=32ms',
                 'Latency Counts <=64ms', 'Latency Counts <=128ms', 'Latency Counts <=256ms',
                 'Latency Counts <=512ms','Latency Counts <=1s', 'Latency Counts <=2s',
                 'Latency Counts <=4s', 'Latency Counts <=8s', 'Latency Counts <=16s',
                 'Latency Counts >16s']
+        expected_dd_latency_labels = ['Latency Counts <=4ms', 'Latency Counts <=8ms',
+                'Latency Counts <=16ms', 'Latency Counts <=32ms', 'Latency Counts <=64ms',
+                'Latency Counts <=128ms', 'Latency Counts <=256ms', 'Latency Counts <=512ms',
+                'Latency Counts <=1s', 'Latency Counts <=2s', 'Latency Counts <=4s',
+                'Latency Counts >4s']
+
 
         for stats in vd_stats:
             if stats.IOSizeIndexLabels != expected_size_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO size index labels for %s virtual disk %d" % \
                                 (self.get_host_name(), stats.Index))
-            if stats.IOLatencyIndexLabels != expected_latency_labels:
+            if stats.IOLatencyIndexLabels != expected_vd_latency_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
                                 (self.get_host_name(), stats.Index))
+        for stats in disk_stats:
+            if stats.IOSizeIndexLabels != expected_size_labels:
+                raise UnexpectedClientDataException(
+                        "Unexpected IO size index labels for %s disk drive %d" % \
+                                (self.get_host_name(), stats.Index))
+            if stats.IOLatencyIndexLabels != expected_dd_latency_labels:
+                raise UnexpectedClientDataException(
+                        "Unexpected IO latency index labels for %s disk drive %d" % \
+                                (self.get_host_name(), stats.Index))
+
   
         next_fast_poll_time = 0
         fast_iteration = -1

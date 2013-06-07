@@ -264,7 +264,18 @@ class SFADatabase(object):
         self._new_read_request_latency_table()
         self._new_write_request_size_table()
         self._new_write_request_latency_table() 
-    
+
+    def _query_exec(self, query):
+        '''
+        A quick helper function that exists because we kept repeating the same
+        three lines of code in all the table create functions.
+        '''
+
+        cursor = self._dbcon.cursor()
+        cursor.execute( query)
+        cursor.close()
+
+
     def _new_main_table(self):
         '''
         Create the main db table (if it doesn't already exist)
@@ -283,9 +294,7 @@ class SFADatabase(object):
         "ENGINE=HEAP" \
         ";"
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 
     def _new_vd_table(self):
         '''
@@ -303,9 +312,7 @@ class SFADatabase(object):
         "ENGINE=HEAP" \
         ";"
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 
     def _new_dd_table(self):
         '''
@@ -324,9 +331,7 @@ class SFADatabase(object):
         "ENGINE=HEAP" \
         ";"
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 
 
     def _new_read_request_size_table( self):
@@ -338,9 +343,7 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + \
         " " + PARTIAL_SIZE_TABLE_DEF
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 
     def _new_write_request_size_table( self):
         '''
@@ -351,9 +354,7 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["WRITE_REQUEST_SIZE_TABLE_NAME"] + \
         " " + PARTIAL_SIZE_TABLE_DEF
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 
     def _new_read_request_latency_table( self):
         '''
@@ -364,9 +365,7 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + \
         " "  + PARTIAL_LATENCY_TABLE_DEF
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 
     def _new_write_request_latency_table( self):
         '''
@@ -377,7 +376,5 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
         " "  + PARTIAL_LATENCY_TABLE_DEF
 
-        cursor = self._dbcon.cursor()
-        cursor.execute( table_def)
-        cursor.close()
+        self._query_exec( table_def)
 

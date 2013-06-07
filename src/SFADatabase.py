@@ -15,18 +15,21 @@ TABLE_NAMES = {
              "DISK_TABLE_NAME" : u"Disk",
              "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays",
-             "READ_REQUEST_SIZE_TABLE_NAME" : u"ReadRequestSizes",
-             "READ_REQUEST_LATENCY_TABLE_NAME" : u"ReadRequestLatencies",
-             "WRITE_REQUEST_SIZE_TABLE_NAME" : u"WriteRequestSizes",
-             "WRITE_REQUEST_LATENCY_TABLE_NAME" : u"WriteRequestLatencies"
-
+             "VD_READ_REQUEST_SIZE_TABLE_NAME" : u"VirtDiskReadRequestSizes",
+             "VD_READ_REQUEST_LATENCY_TABLE_NAME" : u"VirtDiskReadRequestLatencies",
+             "VD_WRITE_REQUEST_SIZE_TABLE_NAME" : u"VirtDiskWriteRequestSizes",
+             "VD_WRITE_REQUEST_LATENCY_TABLE_NAME" : u"VirtDiskWriteRequestLatencies",
+             "DD_READ_REQUEST_SIZE_TABLE_NAME" : u"DiskDriveReadRequestSizes",
+             "DD_READ_REQUEST_LATENCY_TABLE_NAME" : u"DiskDriveReadRequestLatencies",
+             "DD_WRITE_REQUEST_SIZE_TABLE_NAME" : u"DiskDriveWriteRequestSizes",
+             "DD_WRITE_REQUEST_LATENCY_TABLE_NAME" : u"DiskDriveWriteRequestLatencies"
 #define USER_TABLE_NAME             "Users"
  }
 #
 
 # Partially complete SQL statements for creating the request size
-# latency tables
-PARTIAL_LATENCY_TABLE_DEF = \
+# and latency tables
+PARTIAL_VD_LATENCY_TABLE_DEF = \
     "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
     "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
     "16ms INT UNSIGNED NOT NULL, " \
@@ -45,6 +48,27 @@ PARTIAL_LATENCY_TABLE_DEF = \
     "INDEX( Hostname), INDEX( Disk_Num) )" \
     "ENGINE=HEAP" \
     ";"
+
+PARTIAL_DD_LATENCY_TABLE_DEF = \
+    "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+    "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
+    "4ms INT UNSIGNED NOT NULL, " \
+    "8ms INT UNSIGNED NOT NULL, " \
+    "16ms INT UNSIGNED NOT NULL, " \
+    "32ms  INT UNSIGNED NOT NULL, " \
+    "64ms INT UNSIGNED NOT NULL, " \
+    "128ms INT UNSIGNED NOT NULL, " \
+    "256ms INT UNSIGNED NOT NULL, " \
+    "512ms INT UNSIGNED NOT NULL, " \
+    "1s INT UNSIGNED NOT NULL, " \
+    "2s INT UNSIGNED NOT NULL, " \
+    "4s INT UNSIGNED NOT NULL, " \
+    "Longer_Than_4s INT UNSIGNED NOT NULL, " \
+    "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+    "INDEX( Hostname), INDEX( Disk_Num) )" \
+    "ENGINE=HEAP" \
+    ";"
+
 
 PARTIAL_SIZE_TABLE_DEF = \
     "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
@@ -176,7 +200,7 @@ class SFADatabase(object):
                                         str(read_iops), str(write_iops)))
         cursor.close()
 
-    def update_request_size_table( self, sfa_client_name, vd_num, read_table, size_buckets):
+    def update_vd_request_size_table( self, sfa_client_name, vd_num, read_table, size_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
         boolean) for one virtual disk on one client.  size_buckets is a list containing the
@@ -186,9 +210,9 @@ class SFADatabase(object):
         
         replace_query = "REPLACE INTO "
         if read_table:
-            replace_query += TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"]
+            replace_query += TABLE_NAMES["VD_READ_REQUEST_SIZE_TABLE_NAME"]
         else:    
-            replace_query += TABLE_NAMES["WRITE_REQUEST_SIZE_TABLE_NAME"]
+            replace_query += TABLE_NAMES["VD_WRITE_REQUEST_SIZE_TABLE_NAME"]
 
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
         
@@ -206,7 +230,7 @@ class SFADatabase(object):
         cursor.execute( replace_query, values)
         cursor.close()
 
-    def update_request_latency_table( self, sfa_client_name, vd_num, read_table, latency_buckets):
+    def update_vd_request_latency_table( self, sfa_client_name, vd_num, read_table, latency_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
         boolean) for one virtual disk on one client.  latency_buckets is a list containing
@@ -216,9 +240,9 @@ class SFADatabase(object):
 
         replace_query = "REPLACE INTO "
         if read_table:
-            replace_query += TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"]
+            replace_query += TABLE_NAMES["VD_READ_REQUEST_LATENCY_TABLE_NAME"]
         else:
-            replace_query += TABLE_NAMES["WRITE_REQUEST_LATENCY_TABLE_NAME"]
+            replace_query += TABLE_NAMES["VD_WRITE_REQUEST_LATENCY_TABLE_NAME"]
 
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
 
@@ -237,6 +261,67 @@ class SFADatabase(object):
         cursor.close()
 
  
+    def update_dd_request_size_table( self, sfa_client_name, disk_num, read_table, size_buckets):
+        '''
+        Update the read or write request size data (depending on the value of the read_table
+        boolean) for one disk drive on one client.  size_buckets is a list containing the
+        number of requests for each size and is expected to match the size values listed in
+        the column headings.
+        '''
+        
+        replace_query = "REPLACE INTO "
+        if read_table:
+            replace_query += TABLE_NAMES["DD_READ_REQUEST_SIZE_TABLE_NAME"]
+        else:    
+            replace_query += TABLE_NAMES["DD_WRITE_REQUEST_SIZE_TABLE_NAME"]
+            
+        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+        
+        for i in range(len(size_buckets)):
+            replace_query += ", %s"
+        replace_query += ");"
+        
+        values = (sfa_client_name, str(disk_num))
+        for size in size_buckets:
+                values += (str(size), )
+        # Note: it seems like I shouldn't have to convert all the sizes to strings manually,
+        # but I get strange mysql errors if I don't...
+        
+        cursor = self._dbcon.cursor()
+        cursor.execute( replace_query, values)
+        cursor.close()
+        
+    def update_dd_request_latency_table( self, sfa_client_name, disk_num, read_table, latency_buckets):
+        '''
+        Update the read or write request size data (depending on the value of the read_table
+        boolean) for one disk drive on one client.  latency_buckets is a list containing
+        the number of requests that were handled in each time frame and is expected to match
+        the latency values listed in the column headings.
+        '''
+
+        replace_query = "REPLACE INTO "
+        if read_table:
+            replace_query += TABLE_NAMES["DD_READ_REQUEST_LATENCY_TABLE_NAME"]
+        else:
+            replace_query += TABLE_NAMES["DD_WRITE_REQUEST_LATENCY_TABLE_NAME"]
+            
+        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+        
+        for i in range(len(latency_buckets)):
+            replace_query += ", %s"
+        replace_query += ");"
+        
+        values = (sfa_client_name, str(disk_num))
+        for latency in latency_buckets:
+                values += (str(latency), )
+        # Note: it seems like I shouldn't have to convert all the values to strings manually,
+        # but I get strange mysql errors if I don't...
+        
+        cursor = self._dbcon.cursor()
+        cursor.execute( replace_query, values)
+        cursor.close()
+
+
     def _create_schema(self):
         # Drop the old tables (since we're not storing long-term data, it's easier
         # to drop the old tables and re-create them than it is to use ALTER TABLE
@@ -260,10 +345,14 @@ class SFADatabase(object):
         self._new_main_table()
         self._new_vd_table()
         self._new_dd_table()
-        self._new_read_request_size_table()
-        self._new_read_request_latency_table()
-        self._new_write_request_size_table()
-        self._new_write_request_latency_table() 
+        self._new_dd_read_request_size_table()
+        self._new_dd_read_request_latency_table()
+        self._new_dd_write_request_size_table()
+        self._new_dd_write_request_latency_table() 
+        self._new_vd_read_request_size_table()
+        self._new_vd_read_request_latency_table()
+        self._new_vd_write_request_size_table()
+        self._new_vd_write_request_latency_table()
 
     def _query_exec(self, query):
         '''
@@ -333,48 +422,92 @@ class SFADatabase(object):
 
         self._query_exec( table_def)
 
-
-    def _new_read_request_size_table( self):
+# Virtual disk request size and latency tables
+    def _new_vd_read_request_size_table( self):
         '''
-        Create the db table that holds read request size information.
+        Create the db table that holds virtual disk read request size information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_SIZE_TABLE_NAME"] + \
+        "CREATE TABLE " + TABLE_NAMES["VD_READ_REQUEST_SIZE_TABLE_NAME"] + \
         " " + PARTIAL_SIZE_TABLE_DEF
 
         self._query_exec( table_def)
 
-    def _new_write_request_size_table( self):
+    def _new_vd_write_request_size_table( self):
         '''
-        Create the db table that holds write request size information.
+        Create the db table that holds virtual disk write request size information.
         '''
         
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["WRITE_REQUEST_SIZE_TABLE_NAME"] + \
+        "CREATE TABLE " + TABLE_NAMES["VD_WRITE_REQUEST_SIZE_TABLE_NAME"] + \
         " " + PARTIAL_SIZE_TABLE_DEF
 
         self._query_exec( table_def)
 
-    def _new_read_request_latency_table( self):
+    def _new_vd_read_request_latency_table( self):
         '''
-        Create the db table that holds read request latency information.
-        '''
-
-        table_def = \
-        "CREATE TABLE " + TABLE_NAMES["READ_REQUEST_LATENCY_TABLE_NAME"] + \
-        " "  + PARTIAL_LATENCY_TABLE_DEF
-
-        self._query_exec( table_def)
-
-    def _new_write_request_latency_table( self):
-        '''
-        Create the db table that holds write request latency information.
+        Create the db table that holds virtual disk read request latency information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
-        " "  + PARTIAL_LATENCY_TABLE_DEF
+        "CREATE TABLE " + TABLE_NAMES["VD_READ_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_VD_LATENCY_TABLE_DEF
 
         self._query_exec( table_def)
 
+    def _new_vd_write_request_latency_table( self):
+        '''
+        Create the db table that holds virtual disk write request latency information.
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["VD_WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_VD_LATENCY_TABLE_DEF
+
+        self._query_exec( table_def)
+
+# Disk drive request size and latency tables
+    def _new_dd_read_request_size_table( self):
+        '''
+        Create the db table that holds disk drive read request size information.
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["DD_READ_REQUEST_SIZE_TABLE_NAME"] + \
+        " " + PARTIAL_SIZE_TABLE_DEF
+
+        self._query_exec( table_def)
+
+    def _new_dd_write_request_size_table( self):
+        '''
+        Create the db table that holds disk drive write request size information.
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["DD_WRITE_REQUEST_SIZE_TABLE_NAME"] + \
+        " " + PARTIAL_SIZE_TABLE_DEF
+
+        self._query_exec( table_def)
+
+    def _new_dd_read_request_latency_table( self):
+        '''
+        Create the db table that holds disk drive read request latency information.
+        '''
+        
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["DD_READ_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_DD_LATENCY_TABLE_DEF
+        
+        self._query_exec( table_def)
+    
+    def _new_dd_write_request_latency_table( self):
+        '''
+        Create the db table that holds disk drive write request latency information.
+        '''
+        
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["DD_WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_DD_LATENCY_TABLE_DEF
+        
+        self._query_exec( table_def)

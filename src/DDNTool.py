@@ -177,14 +177,26 @@ def main_func():
                 for client in sfa_clients:
                     vd_nums = client.get_vd_nums()
                     for vd_num in vd_nums:
-                        request_values = client.get_io_read_request_sizes( vd_num)
-                        db.update_request_size_table( client.get_host_name(), vd_num, True, request_values)
-                        request_values = client.get_io_write_request_sizes( vd_num)
-                        db.update_request_size_table( client.get_host_name(), vd_num, False, request_values)
-                        request_values = client.get_io_read_latencies( vd_num)
-                        db.update_request_latency_table( client.get_host_name(), vd_num, True, request_values)
-                        request_values = client.get_io_write_latencies( vd_num)
-                        db.update_request_latency_table( client.get_host_name(), vd_num, False, request_values)
+                        request_values = client.get_vd_io_read_request_sizes( vd_num)
+                        db.update_vd_request_size_table( client.get_host_name(), vd_num, True, request_values)
+                        request_values = client.get_vd_io_write_request_sizes( vd_num)
+                        db.update_vd_request_size_table( client.get_host_name(), vd_num, False, request_values)
+                        request_values = client.get_vd_io_read_latencies( vd_num)
+                        db.update_vd_request_latency_table( client.get_host_name(), vd_num, True, request_values)
+                        request_values = client.get_vd_io_write_latencies( vd_num)
+                        db.update_vd_request_latency_table( client.get_host_name(), vd_num, False, request_values)
+
+                    dd_nums = client.get_dd_nums()
+                    for dd_num in dd_nums:
+                        request_values = client.get_dd_io_read_request_sizes( dd_num)
+                        db.update_dd_request_size_table( client.get_host_name(), dd_num, True, request_values)
+                        request_values = client.get_dd_io_write_request_sizes( dd_num)
+                        db.update_dd_request_size_table( client.get_host_name(), dd_num, False, request_values)
+                        request_values = client.get_dd_io_read_latencies( dd_num)
+                        db.update_dd_request_latency_table( client.get_host_name(), dd_num, True, request_values)
+                        request_values = client.get_dd_io_write_latencies( dd_num)
+                        db.update_dd_request_latency_table( client.get_host_name(), dd_num, False, request_values)
+
 
 
             ############# Slow Interval Stuff #######################

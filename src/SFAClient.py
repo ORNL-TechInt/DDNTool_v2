@@ -66,11 +66,13 @@ class SFAClient( threading.Thread):
         # numbers don't have to be sequential.)
         self._time_series = {}
   
-        # Virtual Disk Statistics objects
-        # We keep copies of each SFAVirtualDiskStatistics object (mainly for
-        # the I/O latency and request size arrays.
+        # Statistics objects
+        # We keep copies of each SFAVirtualDiskStatistics and 
+        # SFADiskDriveStatistics object (mainly for the I/O latency and
+        # request size arrays).
         # Dictionary maps the virtual disk index to its corresponding object
         self._vd_stats = {}
+        self._dd_stats = {}
 
         self.start()    # kick off the background thread
         # We return now, but it's a good idea to wait until is_ready()
@@ -176,7 +178,7 @@ class SFAClient( threading.Thread):
         return average
 
 
-    def get_io_read_latencies( self, vd_num):
+    def get_vd_io_read_latencies( self, vd_num):
         '''
         Returns list of I/O read latency values for the specified virtual disk
         '''
@@ -189,7 +191,7 @@ class SFAClient( threading.Thread):
         
         return latencies
 
-    def get_io_write_latencies( self, vd_num):
+    def get_vd_io_write_latencies( self, vd_num):
         '''
         Returns list of I/O write latency values for the specified virtual disk
         '''
@@ -202,7 +204,7 @@ class SFAClient( threading.Thread):
 
         return latencies
 
-    def get_io_read_request_sizes( self, vd_num):
+    def get_vd_io_read_request_sizes( self, vd_num):
         '''
         Returns list of I/O request sizes for the specified virtual disk
         '''
@@ -215,7 +217,7 @@ class SFAClient( threading.Thread):
 
         return sizes
 
-    def get_io_write_request_sizes( self, vd_num):
+    def get_vd_io_write_request_sizes( self, vd_num):
         '''
         Returns list of I/O write request sizes for the specified virtual disk
         '''
@@ -227,6 +229,61 @@ class SFAClient( threading.Thread):
             self._lock.release()
 
         return sizes
+
+    def get_dd_io_read_latencies( self, disk_num):
+        '''
+        Returns list of I/O read latency values for the specified disk drive
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            latencies = self._dd_stats[disk_num].ReadIOLatencyBuckets
+        finally:
+            self._lock.release()
+
+        return latencies
+
+    def get_dd_io_write_latencies( self, disk_num):
+        '''
+        Returns list of I/O write latency values for the specified disk drive
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            latencies = self._dd_stats[disk_num].WriteIOLatencyBuckets
+        finally:
+            self._lock.release()
+
+        return latencies
+
+    def get_dd_io_read_request_sizes( self, disk_num):
+        '''
+        Returns list of I/O request sizes for the specified disk drive
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            sizes = self._dd_stats[disk_num].ReadIOSizeBuckets
+        finally:
+            self._lock.release()
+
+        return sizes
+
+    def get_dd_io_write_request_sizes( self, disk_num):
+        '''
+        Returns list of I/O write request sizes for the specified disk drive
+        '''
+        #TODO: need some protection against 'key not found' type of errors 
+        self._lock.acquire()
+        try:
+            sizes = self._dd_stats[disk_num].WriteIOSizeBuckets
+        finally:
+            self._lock.release()
+
+        return sizes
+
+
+
 
 
     def get_io_latency_labels( self):
@@ -291,6 +348,7 @@ class SFAClient( threading.Thread):
         self._time_series['dd_transfer_bytes'] = { }
         for stats in disk_stats:
             index = stats.Index
+            self._dd_stats[index] = stats
             self._time_series['dd_read_iops'][index] = SFATimeSeries( 300)
             self._time_series['dd_write_iops'][index] = SFATimeSeries( 300)
             self._time_series['dd_transfer_bytes'][index] = SFATimeSeries( 300)

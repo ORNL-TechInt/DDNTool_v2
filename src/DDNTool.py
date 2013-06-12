@@ -127,7 +127,6 @@ def main_func():
         db_host = config.get('database', 'db_host')
         db_name = config.get('database', 'db_name')
         db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, args.init_db)
-        db.verify_main_table( sfa_hosts)
 
         # loop forever polling the clients and updating the database
         print "Entering main loop.  Ctrl-C to exit."

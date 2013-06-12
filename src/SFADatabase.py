@@ -11,7 +11,7 @@ import mysql.connector
 # Note: the names need to be unicode because that's what we get back from
 # a SHOW TABLES statement
 TABLE_NAMES = {
-             "MAIN_TABLE_NAME" : u"Main",
+#             "MAIN_TABLE_NAME" : u"Main",
              "DISK_TABLE_NAME" : u"Disk",
              "LUN_TABLE_NAME" : u"LunInfo",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays",
@@ -119,52 +119,6 @@ class SFADatabase(object):
             self._create_schema()
         
  
-    def verify_main_table(self, sfa_clients):
-        '''
-        The main table is the only one we perform UPDATE queries on.  (For the others,
-        we delete a row and insert a new one.)  The UPDATE query requires that the row
-        already exists, so function ensures that we've got a row for every client
-        in the list.
-        
-        Returns the number of rows that were actually inserted.  (Not terribly
-        useful for production, but helpful for the unit tests.)
-        '''
-        
-        
-        find_query = "SELECT * FROM " + TABLE_NAMES['MAIN_TABLE_NAME'] + " WHERE Hostname = %s;"
-        insert_query = "INSERT INTO " + TABLE_NAMES['MAIN_TABLE_NAME'] + " SET Hostname = %s;"
-        
-        num_inserts = 0
-        cursor = self._dbcon.cursor()
-        for client in sfa_clients:
-            cursor.execute( find_query, (client,))
-            if len(cursor.fetchall()) == 0:
-                cursor.execute(insert_query, (client,))
-                num_inserts += 1
-            
-        cursor.close()
-        return num_inserts
-
-    def update_main_table( self, sfa_client_name,
-                           transfer_bw, 
-                           read_iops, write_iops,
-                           rebuild_bw, verify_bw):
-        '''
-        Updates one row in the main table.  The row for the particular client
-        must already exist. (See verify_main_table())
-        '''
-
-        query = "UPDATE " + TABLE_NAMES['MAIN_TABLE_NAME'] + " SET " + \
-            "Transfer_BW = %s, Read_IOPS = %s, Write_IOPS = %s, Rebuild_BW = %s, " + \
-            "Verify_BW = %s WHERE Hostname = %s;"
-
-        cursor = self._dbcon.cursor()
-        cursor.execute( query, (str(transfer_bw), str(read_iops),
-                                str(write_iops), str(rebuild_bw), str(verify_bw),
-                                sfa_client_name))
-        cursor.close()
-                             
-
     def update_lun_table( self, sfa_client_name, lun_num, transfer_bw,
                          read_iops, write_iops, forwarded_bw,
                          forwarded_iops):
@@ -342,7 +296,6 @@ class SFADatabase(object):
                 cursor.close()
         
         # create the new table(s)
-        self._new_main_table()
         self._new_lun_table()
         self._new_dd_table()
         self._new_dd_read_request_size_table()
@@ -363,27 +316,6 @@ class SFADatabase(object):
         cursor = self._dbcon.cursor()
         cursor.execute( query)
         cursor.close()
-
-
-    def _new_main_table(self):
-        '''
-        Create the main db table (if it doesn't already exist)
-        '''
-        # self._dbcon must be valid
-        
-        table_def = \
-        "CREATE TABLE " + TABLE_NAMES["MAIN_TABLE_NAME"] + \
-        "(Hostname VARCHAR(75) KEY, LastUpdate TIMESTAMP, DDN_Name VARCHAR( 75)," \
-        "DDN_Partner_Name VARCHAR( 75), Unit_Number TINYINT UNSIGNED, Alarm BOOL," \
-        "Time_Since_Restart VARCHAR( 30), Total_Uptime VARCHAR( 30)," \
-        "Transfer_BW FLOAT, Read_IOPS FLOAT, Write_IOPS FLOAT, Rebuild_BW FLOAT, Verify_BW FLOAT," \
-        "Cache_Size INT UNSIGNED, Cache_Error BOOL, WC_Disabled BOOL," \
-        "WC_Disable_Reason VARCHAR( 75), Disk_Failures SMALLINT UNSIGNED," \
-        "INDEX( Hostname))" \
-        "ENGINE=HEAP" \
-        ";"
-
-        self._query_exec( table_def)
 
     def _new_lun_table(self):
         '''

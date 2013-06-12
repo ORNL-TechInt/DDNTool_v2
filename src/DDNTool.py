@@ -147,12 +147,12 @@ def main_func():
                 lun_nums = client.get_lun_nums()
                 for lun_num in lun_nums:
                     try:
-                        read_iops = client.get_time_series_average( 'vd_read_iops', lun_num, 60)
-                        write_iops = client.get_time_series_average( 'vd_write_iops', lun_num, 60)
-                        bandwidth = client.get_time_series_average( 'vd_transfer_bytes', lun_num, 60)
-                        fw_bandwidth = client.get_time_series_average( 'vd_forwarded_bytes', lun_num, 60)
-                        fw_iops = client.get_time_series_average( 'vd_forwarded_iops', lun_num, 60)
-                        db.update_vd_table(client.get_host_name(), lun_num, bandwidth[0],
+                        read_iops = client.get_time_series_average( 'lun_read_iops', lun_num, 60)
+                        write_iops = client.get_time_series_average( 'lun_write_iops', lun_num, 60)
+                        bandwidth = client.get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
+                        fw_bandwidth = client.get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
+                        fw_iops = client.get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
+                        db.update_lun_table(client.get_host_name(), lun_num, bandwidth[0],
                                            read_iops[0], write_iops[0], fw_bandwidth[0],
                                            fw_iops[0])
                     except EmptyTimeSeriesException:

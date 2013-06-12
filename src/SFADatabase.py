@@ -13,7 +13,7 @@ import mysql.connector
 TABLE_NAMES = {
              "MAIN_TABLE_NAME" : u"Main",
              "DISK_TABLE_NAME" : u"Disk",
-             "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
+             "LUN_TABLE_NAME" : u"LunInfo",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays",
              "LUN_READ_REQUEST_SIZE_TABLE_NAME" : u"LunReadRequestSizes",
              "LUN_READ_REQUEST_LATENCY_TABLE_NAME" : u"LunReadRequestLatencies",
@@ -165,26 +165,26 @@ class SFADatabase(object):
         cursor.close()
                              
 
-    def update_vd_table( self, sfa_client_name, vd_num, transfer_bw,
+    def update_lun_table( self, sfa_client_name, lun_num, transfer_bw,
                          read_iops, write_iops, forwarded_bw,
                          forwarded_iops):
         '''
-        Updates the row in the virtual disk table for the specified 
+        Updates the row in the lun info table for the specified 
         client and virtual disk.
         '''
 
-        replace_query = "REPLACE INTO " + TABLE_NAMES['VIRTUAL_DISK_TABLE_NAME'] + \
+        replace_query = "REPLACE INTO " + TABLE_NAMES['LUN_TABLE_NAME'] + \
                 "(Hostname, Disk_Num, Transfer_BW, Read_IOPS, Write_IOPS, " \
                 "Forwarded_BW, Forwarded_IOPS) " \
                 "VALUES( %s, %s, %s, %s, %s, %s, %s);"
         
         cursor = self._dbcon.cursor()
-        cursor.execute( replace_query, (sfa_client_name, str(vd_num), str(transfer_bw),
+        cursor.execute( replace_query, (sfa_client_name, str(lun_num), str(transfer_bw),
                                         str(read_iops), str(write_iops),
                                         str(forwarded_bw), str(forwarded_iops)))
         cursor.close()
 
-    def update_dd_table( self, sfa_client_name, vd_num, transfer_bw,
+    def update_dd_table( self, sfa_client_name, dd_num, transfer_bw,
             read_iops, write_iops):
         '''
         Updates the row in the disk table for the specified 
@@ -196,7 +196,7 @@ class SFADatabase(object):
                         "VALUES( %s, %s, %s, %s, %s);"
      
         cursor = self._dbcon.cursor()
-        cursor.execute( replace_query, (sfa_client_name, str(vd_num), str(transfer_bw),
+        cursor.execute( replace_query, (sfa_client_name, str(dd_num), str(transfer_bw),
                                         str(read_iops), str(write_iops)))
         cursor.close()
 
@@ -343,7 +343,7 @@ class SFADatabase(object):
         
         # create the new table(s)
         self._new_main_table()
-        self._new_vd_table()
+        self._new_lun_table()
         self._new_dd_table()
         self._new_dd_read_request_size_table()
         self._new_dd_read_request_latency_table()
@@ -385,13 +385,13 @@ class SFADatabase(object):
 
         self._query_exec( table_def)
 
-    def _new_vd_table(self):
+    def _new_lun_table(self):
         '''
-        Create the db table that holds statistics on all the virtual disks
+        Create the db table that holds statistics on all the luns
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["VIRTUAL_DISK_TABLE_NAME"] + " "  \
+        "CREATE TABLE " + TABLE_NAMES["LUN_TABLE_NAME"] + " "  \
         "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
         "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
         "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \

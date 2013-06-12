@@ -155,19 +155,6 @@ class SFAClient( threading.Thread):
 
         return luns
 
-# commenting out because I don't think I'll need it any more
-#    def get_vd_nums(self):
-#        '''
-#        Returns a sorted list of all the virtual disk numbers this client has
-#        '''
-#        self._lock.acquire()
-#        try:
-#            nums = sorted(self._time_series['vd_read_iops'])
-#        finally:
-#            self._lock.release()
-#        
-#        return nums
-
     def get_dd_nums(self):
         '''
         Returns a sorted list of all the disk drive indexes on this client has
@@ -351,23 +338,23 @@ class SFAClient( threading.Thread):
 
         # initialize the time series arrays
         vd_stats = SFAVirtualDiskStatistics.getAll()
-        self._time_series['vd_read_iops'] = { }
-        self._time_series['vd_write_iops'] = { }
-        self._time_series['vd_transfer_bytes'] = { }
-        self._time_series['vd_forwarded_bytes'] = { }
-        self._time_series['vd_forwarded_iops'] = { }
+        self._time_series['lun_read_iops'] = { }
+        self._time_series['lun_write_iops'] = { }
+        self._time_series['lun_transfer_bytes'] = { }
+        self._time_series['lun_forwarded_bytes'] = { }
+        self._time_series['lun_forwarded_iops'] = { }
         for stats in vd_stats:
             index = stats.Index
             self._vd_stats[index] = stats
 
             # Note that these maps are indexed by Lun, not by virtual disk (despite
-            # saying vd_ in the name and coming from SFAVirtualDiskStatistics objects)
+            # coming from SFAVirtualDiskStatistics objects)
             # 300 entries is 10 minutes of data at 2 second sample rate
-            self._time_series['vd_read_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300) 
-            self._time_series['vd_write_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
-            self._time_series['vd_transfer_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
-            self._time_series['vd_forwarded_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
-            self._time_series['vd_forwarded_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
+            self._time_series['lun_read_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300) 
+            self._time_series['lun_write_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
+            self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
+            self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
+            self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
 
         disk_stats = SFADiskDriveStatistics.getAll()
         self._time_series['dd_read_iops'] = { }
@@ -389,7 +376,7 @@ class SFAClient( threading.Thread):
                 'IO Size <=32KiB', 'IO Size <=64KiB', 'IO Size <=128KiB',
                 'IO Size <=256KiB', 'IO Size <=512KiB', 'IO Size <=1MiB',
                 'IO Size <=2MiB', 'IO Size <=4MiB', 'IO Size >4MiB']
-        expected_vd_latency_labels = ['Latency Counts <=16ms', 'Latency Counts <=32ms',
+        expected_lun_latency_labels = ['Latency Counts <=16ms', 'Latency Counts <=32ms',
                 'Latency Counts <=64ms', 'Latency Counts <=128ms', 'Latency Counts <=256ms',
                 'Latency Counts <=512ms','Latency Counts <=1s', 'Latency Counts <=2s',
                 'Latency Counts <=4s', 'Latency Counts <=8s', 'Latency Counts <=16s',
@@ -406,7 +393,7 @@ class SFAClient( threading.Thread):
                 raise UnexpectedClientDataException(
                         "Unexpected IO size index labels for %s virtual disk %d" % \
                                 (self.get_host_name(), stats.Index))
-            if stats.IOLatencyIndexLabels != expected_vd_latency_labels:
+            if stats.IOLatencyIndexLabels != expected_lun_latency_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
                                 (self.get_host_name(), stats.Index))
@@ -449,17 +436,17 @@ class SFAClient( threading.Thread):
                     # Note: we actually get back 2 element lists - one element
                     # for each controller in the couplet.  In theory, one of those
                     # elements should always be 0.
-                    self._time_series['vd_read_iops'][self._vd_to_lun[index]].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                    self._time_series['vd_write_iops'][self._vd_to_lun[index]].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                    self._time_series['vd_transfer_bytes'][self._vd_to_lun[index]].append(
+                    self._time_series['lun_read_iops'][self._vd_to_lun[index]].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                    self._time_series['lun_write_iops'][self._vd_to_lun[index]].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                    self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]].append(
                             (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
                     # Note: converted to bytes
 
-                    self._time_series['vd_forwarded_bytes'][self._vd_to_lun[index]].append(
+                    self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]].append(
                             (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
                     # Note: converted to bytes 
 
-                    self._time_series['vd_forwarded_iops'][self._vd_to_lun[index]].append(
+                    self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]].append(
                             stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
             finally:
                 self._lock.release()

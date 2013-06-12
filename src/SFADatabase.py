@@ -15,10 +15,10 @@ TABLE_NAMES = {
              "DISK_TABLE_NAME" : u"Disk",
              "VIRTUAL_DISK_TABLE_NAME" : u"VirtDisk",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays",
-             "VD_READ_REQUEST_SIZE_TABLE_NAME" : u"VirtDiskReadRequestSizes",
-             "VD_READ_REQUEST_LATENCY_TABLE_NAME" : u"VirtDiskReadRequestLatencies",
-             "VD_WRITE_REQUEST_SIZE_TABLE_NAME" : u"VirtDiskWriteRequestSizes",
-             "VD_WRITE_REQUEST_LATENCY_TABLE_NAME" : u"VirtDiskWriteRequestLatencies",
+             "LUN_READ_REQUEST_SIZE_TABLE_NAME" : u"LunReadRequestSizes",
+             "LUN_READ_REQUEST_LATENCY_TABLE_NAME" : u"LunReadRequestLatencies",
+             "LUN_WRITE_REQUEST_SIZE_TABLE_NAME" : u"LunWriteRequestSizes",
+             "LUN_WRITE_REQUEST_LATENCY_TABLE_NAME" : u"LunWriteRequestLatencies",
              "DD_READ_REQUEST_SIZE_TABLE_NAME" : u"DiskDriveReadRequestSizes",
              "DD_READ_REQUEST_LATENCY_TABLE_NAME" : u"DiskDriveReadRequestLatencies",
              "DD_WRITE_REQUEST_SIZE_TABLE_NAME" : u"DiskDriveWriteRequestSizes",
@@ -29,9 +29,9 @@ TABLE_NAMES = {
 
 # Partially complete SQL statements for creating the request size
 # and latency tables
-PARTIAL_VD_LATENCY_TABLE_DEF = \
+PARTIAL_LUN_LATENCY_TABLE_DEF = \
     "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
-    "Disk_Num SMALLINT UNSIGNED NOT NULL, " \
+    "LUN SMALLINT UNSIGNED NOT NULL, " \
     "16ms INT UNSIGNED NOT NULL, " \
     "32ms  INT UNSIGNED NOT NULL, " \
     "64ms INT UNSIGNED NOT NULL, " \
@@ -200,19 +200,19 @@ class SFADatabase(object):
                                         str(read_iops), str(write_iops)))
         cursor.close()
 
-    def update_vd_request_size_table( self, sfa_client_name, vd_num, read_table, size_buckets):
+    def update_lun_request_size_table( self, sfa_client_name, lun_num, read_table, size_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
-        boolean) for one virtual disk on one client.  size_buckets is a list containing the
+        boolean) for one LUN on one client.  size_buckets is a list containing the
         number of requests for each size and is expected to match the size values listed in
         the column headings.
         '''
         
         replace_query = "REPLACE INTO "
         if read_table:
-            replace_query += TABLE_NAMES["VD_READ_REQUEST_SIZE_TABLE_NAME"]
+            replace_query += TABLE_NAMES["LUN_READ_REQUEST_SIZE_TABLE_NAME"]
         else:    
-            replace_query += TABLE_NAMES["VD_WRITE_REQUEST_SIZE_TABLE_NAME"]
+            replace_query += TABLE_NAMES["LUN_WRITE_REQUEST_SIZE_TABLE_NAME"]
 
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
         
@@ -220,7 +220,7 @@ class SFADatabase(object):
             replace_query += ", %s"
         replace_query += ");"
        
-        values = (sfa_client_name, str(vd_num))
+        values = (sfa_client_name, str(lun_num))
         for size in size_buckets:
                 values += (str(size), )
         # Note: it seems like I shouldn't have to convert all the sizes to strings manually,
@@ -230,19 +230,19 @@ class SFADatabase(object):
         cursor.execute( replace_query, values)
         cursor.close()
 
-    def update_vd_request_latency_table( self, sfa_client_name, vd_num, read_table, latency_buckets):
+    def update_lun_request_latency_table( self, sfa_client_name, lun_num, read_table, latency_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
-        boolean) for one virtual disk on one client.  latency_buckets is a list containing
+        boolean) for one lun on one client.  latency_buckets is a list containing
         the number of requests that were handled in each time frame and is expected to match
         the latency values listed in the column headings.
         '''
 
         replace_query = "REPLACE INTO "
         if read_table:
-            replace_query += TABLE_NAMES["VD_READ_REQUEST_LATENCY_TABLE_NAME"]
+            replace_query += TABLE_NAMES["LUN_READ_REQUEST_LATENCY_TABLE_NAME"]
         else:
-            replace_query += TABLE_NAMES["VD_WRITE_REQUEST_LATENCY_TABLE_NAME"]
+            replace_query += TABLE_NAMES["LUN_WRITE_REQUEST_LATENCY_TABLE_NAME"]
 
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
 
@@ -250,7 +250,7 @@ class SFADatabase(object):
             replace_query += ", %s"
         replace_query += ");"
 
-        values = (sfa_client_name, str(vd_num))
+        values = (sfa_client_name, str(lun_num))
         for latency in latency_buckets:
                 values += (str(latency), )
         # Note: it seems like I shouldn't have to convert all the values to strings manually,
@@ -349,10 +349,10 @@ class SFADatabase(object):
         self._new_dd_read_request_latency_table()
         self._new_dd_write_request_size_table()
         self._new_dd_write_request_latency_table() 
-        self._new_vd_read_request_size_table()
-        self._new_vd_read_request_latency_table()
-        self._new_vd_write_request_size_table()
-        self._new_vd_write_request_latency_table()
+        self._new_lun_read_request_size_table()
+        self._new_lun_read_request_latency_table()
+        self._new_lun_write_request_size_table()
+        self._new_lun_write_request_latency_table()
 
     def _query_exec(self, query):
         '''
@@ -423,47 +423,51 @@ class SFADatabase(object):
         self._query_exec( table_def)
 
 # Virtual disk request size and latency tables
-    def _new_vd_read_request_size_table( self):
+    def _new_lun_read_request_size_table( self):
         '''
         Create the db table that holds virtual disk read request size information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["VD_READ_REQUEST_SIZE_TABLE_NAME"] + \
+        "CREATE TABLE " + TABLE_NAMES["LUN_READ_REQUEST_SIZE_TABLE_NAME"] + \
         " " + PARTIAL_SIZE_TABLE_DEF
+        table_def = table_def.replace( 'Disk_Num', 'LUN')
 
         self._query_exec( table_def)
 
-    def _new_vd_write_request_size_table( self):
+    def _new_lun_write_request_size_table( self):
         '''
         Create the db table that holds virtual disk write request size information.
         '''
         
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["VD_WRITE_REQUEST_SIZE_TABLE_NAME"] + \
+        "CREATE TABLE " + TABLE_NAMES["LUN_WRITE_REQUEST_SIZE_TABLE_NAME"] + \
         " " + PARTIAL_SIZE_TABLE_DEF
+        table_def = table_def.replace( 'Disk_Num', 'LUN')
 
         self._query_exec( table_def)
 
-    def _new_vd_read_request_latency_table( self):
+    def _new_lun_read_request_latency_table( self):
         '''
         Create the db table that holds virtual disk read request latency information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["VD_READ_REQUEST_LATENCY_TABLE_NAME"] + \
-        " "  + PARTIAL_VD_LATENCY_TABLE_DEF
+        "CREATE TABLE " + TABLE_NAMES["LUN_READ_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_LUN_LATENCY_TABLE_DEF
+        table_def = table_def.replace( 'Disk_Num', 'LUN')
 
         self._query_exec( table_def)
 
-    def _new_vd_write_request_latency_table( self):
+    def _new_lun_write_request_latency_table( self):
         '''
         Create the db table that holds virtual disk write request latency information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["VD_WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
-        " "  + PARTIAL_VD_LATENCY_TABLE_DEF
+        "CREATE TABLE " + TABLE_NAMES["LUN_WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
+        " "  + PARTIAL_LUN_LATENCY_TABLE_DEF
+        table_def = table_def.replace( 'Disk_Num', 'LUN')
 
         self._query_exec( table_def)
 

@@ -144,20 +144,20 @@ def main_func():
 
             ############# Fast Interval Stuff #####################
             for client in sfa_clients:
-                vd_nums = client.get_vd_nums()
-                for vd_num in vd_nums:
+                lun_nums = client.get_lun_nums()
+                for lun_num in lun_nums:
                     try:
-                        read_iops = client.get_time_series_average( 'vd_read_iops', vd_num, 60)
-                        write_iops = client.get_time_series_average( 'vd_write_iops', vd_num, 60)
-                        bandwidth = client.get_time_series_average( 'vd_transfer_bytes', vd_num, 60)
-                        fw_bandwidth = client.get_time_series_average( 'vd_forwarded_bytes', vd_num, 60)
-                        fw_iops = client.get_time_series_average( 'vd_forwarded_iops', vd_num, 60)
-                        db.update_vd_table(client.get_host_name(), vd_num, bandwidth[0],
+                        read_iops = client.get_time_series_average( 'vd_read_iops', lun_num, 60)
+                        write_iops = client.get_time_series_average( 'vd_write_iops', lun_num, 60)
+                        bandwidth = client.get_time_series_average( 'vd_transfer_bytes', lun_num, 60)
+                        fw_bandwidth = client.get_time_series_average( 'vd_forwarded_bytes', lun_num, 60)
+                        fw_iops = client.get_time_series_average( 'vd_forwarded_iops', lun_num, 60)
+                        db.update_vd_table(client.get_host_name(), lun_num, bandwidth[0],
                                            read_iops[0], write_iops[0], fw_bandwidth[0],
                                            fw_iops[0])
                     except EmptyTimeSeriesException:
                         print "Skipping empty time series for host %s, virtual disk %d"% \
-                                (client.get_host_name(), vd_num)
+                                (client.get_host_name(), lun_num)
 
 
                 dd_nums = client.get_dd_nums()
@@ -175,16 +175,16 @@ def main_func():
             ############# Medium Interval Stuff #####################
             if (fast_iteration % med_poll_multiple == 0):
                 for client in sfa_clients:
-                    vd_nums = client.get_vd_nums()
-                    for vd_num in vd_nums:
-                        request_values = client.get_vd_io_read_request_sizes( vd_num)
-                        db.update_vd_request_size_table( client.get_host_name(), vd_num, True, request_values)
-                        request_values = client.get_vd_io_write_request_sizes( vd_num)
-                        db.update_vd_request_size_table( client.get_host_name(), vd_num, False, request_values)
-                        request_values = client.get_vd_io_read_latencies( vd_num)
-                        db.update_vd_request_latency_table( client.get_host_name(), vd_num, True, request_values)
-                        request_values = client.get_vd_io_write_latencies( vd_num)
-                        db.update_vd_request_latency_table( client.get_host_name(), vd_num, False, request_values)
+                    lun_nums = client.get_lun_nums()
+                    for lun_num in lun_nums:
+                        request_values = client.get_lun_io_read_request_sizes( lun_num)
+                        db.update_lun_request_size_table( client.get_host_name(), lun_num, True, request_values)
+                        request_values = client.get_lun_io_write_request_sizes( lun_num)
+                        db.update_lun_request_size_table( client.get_host_name(), lun_num, False, request_values)
+                        request_values = client.get_lun_io_read_latencies( lun_num)
+                        db.update_lun_request_latency_table( client.get_host_name(), lun_num, True, request_values)
+                        request_values = client.get_lun_io_write_latencies( lun_num)
+                        db.update_lun_request_latency_table( client.get_host_name(), lun_num, False, request_values)
 
                     dd_nums = client.get_dd_nums()
                     for dd_num in dd_nums:

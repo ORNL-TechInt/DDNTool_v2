@@ -431,7 +431,7 @@ class SFAClient():
         # This is something of a hack - I think it might actually be better
         # to pass any exceptions APIConnect() throws up the stack.
         # Not sure yet...
-        APIConnect( self._uri, (self._user, self._password))
+        APIConnect( self._uri, (self._sfa_user, self._sfa_password))
         # Note: this will throw an exception if it can't connect
         # Known exceptions:
         # ddn.sfa.core.APIContextException: -2: Invalid username and/or password

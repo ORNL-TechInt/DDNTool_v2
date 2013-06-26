@@ -33,9 +33,16 @@ def one_controller(host, conf_file):
     This is the function that gets called in a separate process.  It handles
     the polling and database updating for a single controller.
     '''
-    client = SFAClient.SFAClient( host, conf_file)
-    client.run()
-    # run() never returns
+    try:
+        client = SFAClient.SFAClient( host, conf_file)
+        client.run()
+        # run() never returns
+    except KeyboardInterrupt:
+        # Perfectly normal.  Ctrl-C is how we expect to exit
+        pass
+    finally:
+        print "Process ", host, " is exiting."
+
     
     
     

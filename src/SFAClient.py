@@ -4,10 +4,12 @@ Created on Mar 22, 2013
 @author: xmr
 '''
 
-import threading
 import time
+import ConfigParser
 
+import SFADatabase
 from SFATimeSeries import SFATimeSeries
+from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
 
@@ -20,44 +22,41 @@ class UnexpectedClientDataException( Exception):
     pass    # don't need anything besides what's already in the base class
 
     
-class SFAClient( threading.Thread):
+class SFAClient():
     '''
     A class that represents a client for the SFA API.  Specifically, each instance will connect to a DDN
     SFA controller and poll it repeatedly for certain data.  The instance will format and pre-process
-    the data and make the results available via getter functions.
+    the data and then push it up to the database specified in the config file.
+    
+    This class is designed to be used from its own process via the multiprocessing library.
     '''
 
 
-    def __init__(self, address, username, password):
+    def __init__(self, address, conf_file):
         '''
         Constructor
         '''
-        threading.Thread.__init__( self, name=address)
         
-        self._lock = threading.Lock()
-       
+        # parameters for accessing the SFA hardware       
         self._address = address 
         self._uri = "https://" + address
-        self._user = username
-        self._password = password
+        # user and password are in the config file.  (So's the address, but
+        # *all* the addresses are in there and we wouldn't know which one to
+        # connect to.)        
         
         self._connected = False;
         self._exit_requested = False;
+        
+        # open up the config file and grab settings for the database and
+        # polling intervals
+        self._parse_config_file( conf_file)
 
-        self._first_pass_complete = False;
+
         # The values for most everything are empty until the background thread
         # completes a pass through its main loop. 
-
+        self._first_pass_complete = False;
         
-        # How often we poll the DDN hardware - some data needs to be polled
-        # faster than others
-        # TODO: we probably want to read these values from a config file
-        self._fast_poll_interval = 2.0 # in seconds
-        self._med_poll_multiple = 15 # multiples of _fast_poll_interval
-        self._slow_poll_multiple = 60 # multiples of _fast_poll_interval
-        # values of 2.0, 15 & 60 will result in polling every 2 seconds,
-        # 30 seconds and 2 minutes for fast, medium and slow, respectively
-   
+           
         # Time series data
         # This is a dictionary of dictionaries of SFATimeSeries objects
         # The outer dictionary maps the type of data (ie: vd_read_iops),
@@ -82,49 +81,26 @@ class SFAClient( threading.Thread):
         self._vd_to_lun = { }
 
 
-        self.start()    # kick off the background thread
-        # We return now, but it's a good idea to wait until is_ready()
-        # returns true before attempting to do anything with this object.
-        # (The getter functions have undefined (but probably bad) behavior
-        # if called before is_ready() returns true.
-
+        # open a connection to the database
+        self._db = SFADatabase.SFADatabase(self._db_user, self._db_password,
+                                           self._db_host, self._db_name, False)
         
+        
+        self._sfa_connect()   # connect to the sfa controller
+        self._time_series_init()
+        self._check_labels()
+
+                
+
     
     def is_connected(self):
         '''
         Returns True if the instance is connected to the DDN controller, logged in and able
         to communicate with it.
         '''
-        return self._connected
-
-    def is_ready(self):
-        '''
-        Returns True if the instance has enough data for the getter functions to respond
-        with meaningful data.  Calling a getter when this function returns false will
-        result in undefined (but probably bad) behavior.
-        
-        Note: The time series average function may still throw an exception even if
-        this function returns true, since time series need at least 2 data points
-        before they can compute an average.
-        '''
-        return self._connected and self._first_pass_complete
-
-    
-    def stop_thread(self, wait = False, timeout = None):
-        '''
-        Requests thread to stop and optionally waits for it to do so.
-        
-        Returns True if the thread has stopped and false if it is still running.
-        '''
-        self._exit_requested = True;
-        
-        if wait:
-            self.join(timeout)
-        
-        return ( not self.isAlive())
-        
-   
-    def get_host_name(self):
+        return self._sfa_connected
+           
+    def _get_host_name(self):
         '''
         Mostly a convenience function so we can map an object back to a
         human-readable name.
@@ -143,32 +119,20 @@ class SFAClient( threading.Thread):
 
         return names
 
-    def get_lun_nums(self):
+    def _get_lun_nums(self):
         '''
         Returns a sorted list of all the lun numbers this client has
         '''
-        self._lock.acquire()
-        try:
-            luns = sorted(self._vd_to_lun.values())
-        finally:
-            self._lock.release()
+        return sorted(self._vd_to_lun.values())
 
-        return luns
-
-    def get_dd_nums(self):
+    def _get_dd_nums(self):
         '''
-        Returns a sorted list of all the disk drive indexes on this client has
+        Returns a sorted list of all the disk drive indexes this client has
         '''
-        self._lock.acquire()
-        try:
-            nums = sorted(self._time_series['dd_read_iops'])
-        finally:
-            self._lock.release()
+        return sorted(self._time_series['dd_read_iops'])
+        
 
-        return nums
-
-
-    def get_time_series_average( self, series_name, device_num, span):
+    def _get_time_series_average( self, series_name, device_num, span):
         '''
         Return the average value for the specified series and device
         calculated over the specified number of seconds.
@@ -179,158 +143,15 @@ class SFAClient( threading.Thread):
         '''
         #TODO: need some protection against 'key not found' type of
         #errors for both the series name and device number
-        self._lock.acquire()
-        try:
-            average = self._time_series[series_name][device_num].average(span)
-        finally:
-            self._lock.release() # always release the lock, even if
-                                 # an exception occurs above
-        return average
+        return self._time_series[series_name][device_num].average(span)
 
 
-    def get_lun_io_read_latencies( self, lun_num):
+    def _time_series_init(self):
         '''
-        Returns list of I/O read latency values for the specified virtual disk
+        Various initialization stats for all the time series data.  Must be called after the
+        connection to the controller is established.
         '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            latencies = self._vd_stats[lun_num].ReadIOLatencyBuckets
-        finally:
-            self._lock.release()
         
-        return latencies
-
-    def get_lun_io_write_latencies( self, lun_num):
-        '''
-        Returns list of I/O write latency values for the specified virtual disk
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            latencies = self._vd_stats[lun_num].WriteIOLatencyBuckets
-        finally:
-            self._lock.release()
-
-        return latencies
-
-    def get_lun_io_read_request_sizes( self, lun_num):
-        '''
-        Returns list of I/O request sizes for the specified virtual disk
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            sizes = self._vd_stats[lun_num].ReadIOSizeBuckets
-        finally:
-            self._lock.release()
-
-        return sizes
-
-    def get_lun_io_write_request_sizes( self, lun_num):
-        '''
-        Returns list of I/O write request sizes for the specified virtual disk
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            sizes = self._vd_stats[lun_num].WriteIOSizeBuckets
-        finally:
-            self._lock.release()
-
-        return sizes
-
-    def get_dd_io_read_latencies( self, disk_num):
-        '''
-        Returns list of I/O read latency values for the specified disk drive
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            latencies = self._dd_stats[disk_num].ReadIOLatencyBuckets
-        finally:
-            self._lock.release()
-
-        return latencies
-
-    def get_dd_io_write_latencies( self, disk_num):
-        '''
-        Returns list of I/O write latency values for the specified disk drive
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            latencies = self._dd_stats[disk_num].WriteIOLatencyBuckets
-        finally:
-            self._lock.release()
-
-        return latencies
-
-    def get_dd_io_read_request_sizes( self, disk_num):
-        '''
-        Returns list of I/O request sizes for the specified disk drive
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            sizes = self._dd_stats[disk_num].ReadIOSizeBuckets
-        finally:
-            self._lock.release()
-
-        return sizes
-
-    def get_dd_io_write_request_sizes( self, disk_num):
-        '''
-        Returns list of I/O write request sizes for the specified disk drive
-        '''
-        #TODO: need some protection against 'key not found' type of errors 
-        self._lock.acquire()
-        try:
-            sizes = self._dd_stats[disk_num].WriteIOSizeBuckets
-        finally:
-            self._lock.release()
-
-        return sizes
-
-
-    def get_io_latency_labels( self):
-        '''
-        Returns the list of labels for the latency values
-        '''
-
-        # although the lables don't change much, we still acquire the lock,
-        # mainly to avoid issues with an empty self._vd_stats at startup
-        self._lock.acquire()
-        # We periodically verify that all virtual disks have identical latency labels,
-        # so just grab the labels from the first object in the dictionary
-        try:
-            labels = self._vd_stats[self._vd_stats.keys()[0]].IOLatencyIndexLabels
-        finally:
-            self._lock.release()
-        return labels
-
-    def get_io_size_labels( self):
-        '''
-        Returns the list of labels for the request size values
-        '''
-
-        self._lock.acquire()
-        try:
-            labels = self._vd_stats[self._vd_stats.keys()[0]].IOSizeIndexLabels
-        finally:
-            self._lock.release()
-        return labels
-
-
-    def run(self):
-        '''
-        Main body of the background thread:  polls the SFA, post-processes the data and makes the results
-        available to the getter functions.
-        '''
-       
-        self._lock.acquire()
-        self._connect()
-
         # update the lun-to-vd mapping
         # This normally happens at the medium interval, but I need to do it here
         # so that I can store time series data by LUN instead of by virtual disk
@@ -367,10 +188,13 @@ class SFAClient( threading.Thread):
             self._time_series['dd_write_iops'][index] = SFATimeSeries( 300)
             self._time_series['dd_transfer_bytes'][index] = SFATimeSeries( 300)
 
-        self._lock.release()
+        
 
-        # verify the IO request size and latency labels are what we expect (and have
-        # hard coded into the database column headings)
+    def _check_labels(self):
+        '''
+        Verify the IO request size and latency labels are what we expect (and have
+        hard coded into the database column headings)
+        '''
 
         expected_size_labels = ['IO Size <=4KiB', 'IO Size <=8KiB', 'IO Size <=16KiB',
                 'IO Size <=32KiB', 'IO Size <=64KiB', 'IO Size <=128KiB',
@@ -387,7 +211,7 @@ class SFAClient( threading.Thread):
                 'Latency Counts <=1s', 'Latency Counts <=2s', 'Latency Counts <=4s',
                 'Latency Counts >4s']
 
-
+        vd_stats = SFAVirtualDiskStatistics.getAll()
         for stats in vd_stats:
             if stats.IOSizeIndexLabels != expected_size_labels:
                 raise UnexpectedClientDataException(
@@ -397,6 +221,9 @@ class SFAClient( threading.Thread):
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
                                 (self.get_host_name(), stats.Index))
+        disk_stats = SFADiskDriveStatistics.getAll()
+        # NOTE: getAll() is particularly slow for SFADiskDriveStatistics.  Might want to consider
+        # caching this value. (It's fetched up in _time_series_init())
         for stats in disk_stats:
             if stats.IOSizeIndexLabels != expected_size_labels:
                 raise UnexpectedClientDataException(
@@ -407,6 +234,12 @@ class SFAClient( threading.Thread):
                         "Unexpected IO latency index labels for %s disk drive %d" % \
                                 (self.get_host_name(), stats.Index))
 
+        
+
+    def run(self):
+        '''
+        Main loop: polls the SFA, post-processes the data, publish it to the database.  Runs forever.
+        '''
   
         next_fast_poll_time = 0
         fast_iteration = -1
@@ -423,55 +256,45 @@ class SFAClient( threading.Thread):
 
             ##Virtual Disk Statistics 
             vd_stats = SFAVirtualDiskStatistics.getAll()
-            try:
-                self._lock.acquire()  # need to lock the mutex before we modify the data series
-                self._vd_stats = { } # erase the old _vd_stats dictionary
-                for stats in vd_stats:
-                    index = stats.Index
+            self._vd_stats = { } # erase the old _vd_stats dictionary
+            for stats in vd_stats:
+                index = stats.Index
 
-                    # Save the entire object (mainly for its I/O latency and request
-                    # size arrays
-                    self._vd_stats[self._vd_to_lun[index]] = stats
-                    
-                    # Note: we actually get back 2 element lists - one element
-                    # for each controller in the couplet.  In theory, one of those
-                    # elements should always be 0.
-                    self._time_series['lun_read_iops'][self._vd_to_lun[index]].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                    self._time_series['lun_write_iops'][self._vd_to_lun[index]].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                    self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]].append(
-                            (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
-                    # Note: converted to bytes
+                # Save the entire object (mainly for its I/O latency and request
+                # size arrays
+                self._vd_stats[self._vd_to_lun[index]] = stats
+                
+                # Note: we actually get back 2 element lists - one element
+                # for each controller in the couplet.  In theory, one of those
+                # elements should always be 0.
+                self._time_series['lun_read_iops'][self._vd_to_lun[index]].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                self._time_series['lun_write_iops'][self._vd_to_lun[index]].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]].append(
+                        (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
+                # Note: converted to bytes
 
-                    self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]].append(
-                            (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
-                    # Note: converted to bytes 
+                self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]].append(
+                        (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
+                # Note: converted to bytes 
 
-                    self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]].append(
-                            stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
-            finally:
-                self._lock.release()
+                self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]].append(
+                        stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
 
-            # Yes - deliberately unlocking & re-locking the mutex to give other
-            # threads a chance to access the data
 
             ##Disk Statistics
             disk_stats = SFADiskDriveStatistics.getAll()
-            try:
-                self._lock.acquire()  # need to lock the mutex before we modify the data series
-                for stats in disk_stats:
-                    index = stats.Index
+            for stats in disk_stats:
+                index = stats.Index
 
-                    # Note: we actually get back 2 element lists - one element
-                    # for each controller in the couplet.  In theory, one of those
-                    # elements should always be 0.
-                    self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                    self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                    self._time_series['dd_transfer_bytes'][index].append(
-                            (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
-                    # Note: converted to bytes
+                # Note: we actually get back 2 element lists - one element
+                # for each controller in the couplet.  In theory, one of those
+                # elements should always be 0.
+                self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+                self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+                self._time_series['dd_transfer_bytes'][index].append(
+                        (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
+                # Note: converted to bytes
 
-            finally:
-                self._lock.release()
             
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):
@@ -486,7 +309,70 @@ class SFAClient( threading.Thread):
                 # TODO: implement slow interval stuff
                 pass
 
-            self._first_pass_complete = True    
+            ##=====================Database Stuff====================
+            # Note: the database operations are down here after the polling operations
+            # to ensure that everything is polled at least once before we try to push
+            # anything to the database
+            ############# Fast Interval Stuff #######################
+            lun_nums = self._get_lun_nums()
+            for lun_num in lun_nums:
+                try:
+                    read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 60)
+                    write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 60)
+                    bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
+                    fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
+                    fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
+                    self._db.update_lun_table(self._get_host_name(), lun_num, bandwidth[0],
+                                       read_iops[0], write_iops[0], fw_bandwidth[0],
+                                       fw_iops[0])
+                except EmptyTimeSeriesException:
+                    print "Skipping empty time series for host %s, virtual disk %d"% \
+                            (self._get_host_name(), lun_num)
+
+
+            dd_nums = self._get_dd_nums()
+            for dd_num in dd_nums:
+                try:
+                    read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
+                    write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
+                    bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
+                    self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
+                                       read_iops[0], write_iops[0])
+                except EmptyTimeSeriesException:
+                    print "Skipping empty time series for host %s, disk drive %d"% \
+                          (self._get_host_name(), dd_num)
+            
+            ############# Medium Interval Stuff #####################
+            if (fast_iteration % self._med_poll_multiple == 0):
+                lun_nums = self._get_lun_nums()
+                for lun_num in lun_nums:
+                    request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
+                    self._db.update_lun_request_size_table( self._get_host_name(), lun_num, True, request_values)
+                    request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
+                    self._db.update_lun_request_size_table( self._get_host_name(), lun_num, False, request_values)
+                    request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
+                    self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, True, request_values)
+                    request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
+                    self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, False, request_values)
+
+                dd_nums = self._get_dd_nums()
+                for dd_num in dd_nums:
+                    request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
+                    self._db.update_dd_request_size_table( self._get_host_name(), dd_num, True, request_values)
+                    request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
+                    self._db.update_dd_request_size_table( self._get_host_name(), dd_num, False, request_values)
+                    request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
+                    self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, True, request_values)
+                    request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
+                    self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, False, request_values)
+
+            
+            ############# Slow Interval Stuff #######################
+            if (fast_iteration % self._slow_poll_multiple == 0):
+                # TODO: implement slow interval stuff
+                pass
+            
+            
         # end of main while loop
     # end of run() 
             
@@ -495,23 +381,62 @@ class SFAClient( threading.Thread):
     # - "Tier Delay"  - no such command in the API.  Will have to compute it from other values
     # 
      
-     
-    def _connect(self):
+    def _parse_config_file(self, conf_file):
         '''
-        Log in to the DDN hardware
+        Opens up the specified config file and reads settings for SFA & database
+        access and polling intervals.
         '''
-        try:
-            APIConnect( self._uri, (self._user, self._password))
-            # Note: this will throw an exception if it can't connect
-            # Known exceptions:
-            # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
-            # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
-            self._connected = True;
-        except APIContextException, e:
-            pass
-        #except CIMError, e:
-        #    pass
+         
+        config = ConfigParser.ConfigParser()
+        config.read(conf_file)
+    
+        # Get the polling intervals from the config file
+        self._fast_poll_interval = config.getfloat('polling', 'fast_poll_interval')
+        self._med_poll_multiple = config.getint('polling', 'med_poll_multiple')
+        self._slow_poll_multiple = config.getint('polling', 'slow_poll_multiple')
+        # fast_poll_interval is in seconds.  medium and slow are multiples of the
+        # fast interval.  For example, values of 2.0, 15 & 60 will result in
+        # polling every 2 seconds, 30 seconds and 2 minutes for fast, medium
+        # and slow, respectively
+
+        # Parameters for connecting to the SFA hardware
+        self._sfa_user = config.get('ddn_hardware', 'sfa_user')
+        self._sfa_password = config.get('ddn_hardware', 'sfa_password')
         
+        # Parameters for connecting to the database
+        self._db_user = config.get('database', 'db_user')
+        self._db_password = config.get('database', 'db_password')
+        self._db_host = config.get('database', 'db_host')
+        self._db_name = config.get('database', 'db_name')
+
+     
+     
+#    def _sfa_connect(self):
+#        '''
+#        Log in to the DDN hardware
+#        '''
+#        try:
+#            APIConnect( self._uri, (self._user, self._password))
+#            # Note: this will throw an exception if it can't connect
+#            # Known exceptions:
+#            # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
+#            # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
+#            self._sfa_connected = True;
+#        except APIContextException, e:
+#            pass
+#        #except CIMError, e:
+#        #    pass
+
+    def _sfa_connect(self):
+        # This is something of a hack - I think it might actually be better
+        # to pass any exceptions APIConnect() throws up the stack.
+        # Not sure yet...
+        APIConnect( self._uri, (self._user, self._password))
+        # Note: this will throw an exception if it can't connect
+        # Known exceptions:
+        # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
+        # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
+                
     def _update_lun_map( self):
         presentations = SFAPresentation.getAll()
         for p in presentations:

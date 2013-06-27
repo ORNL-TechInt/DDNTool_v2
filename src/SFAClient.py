@@ -28,9 +28,9 @@ class SFAClient():
     SFA controller and poll it repeatedly for certain data.  The instance will format and pre-process
     the data and then push it up to the database specified in the config file.
     
-    This class is designed to be used from its own process via the multiprocessing library.
+    This class is designed to be used from its own process via the multiprocessing library.  The
+    only "public" function it has is run().
     '''
-
 
     def __init__(self, address, conf_file):
         '''
@@ -50,13 +50,7 @@ class SFAClient():
         # open up the config file and grab settings for the database and
         # polling intervals
         self._parse_config_file( conf_file)
-
-
-        # The values for most everything are empty until the background thread
-        # completes a pass through its main loop. 
-        self._first_pass_complete = False;
         
-           
         # Time series data
         # This is a dictionary of dictionaries of SFATimeSeries objects
         # The outer dictionary maps the type of data (ie: vd_read_iops),
@@ -80,58 +74,229 @@ class SFAClient():
         # at the medium frequency.)
         self._vd_to_lun = { }
 
-
         # open a connection to the database
         self._db = SFADatabase.SFADatabase(self._db_user, self._db_password,
                                            self._db_host, self._db_name, False)
         
-        
-        self._sfa_connect()   # connect to the sfa controller
-        self._time_series_init()
-        self._check_labels()
+        # connect to the SFA controller
+        APIConnect( self._uri, (self._sfa_user, self._sfa_password))        
 
-                
+        self._time_series_init()
+        self._check_labels() # verify the labels for the request sizes and latencies
+                             # match what we've hard-coded into the database       
+        
+        
+    def run(self):
+        '''
+        Main loop: polls the SFA, post-processes the data, publish it to the database.  Runs forever.
+        '''
+        # Run the fast poll stuff once right away.  The reason has to do with the time
+        # series data:  in order to calculate an average, we need 2 data points.  Calling
+        # the fast poll tasks now loads the first data point in all the series.  The second
+        # point will be added down in the main loop when the _fast_poll_tasks() is called
+        # again.  This means that by the time we get down to the db update code, all the
+        # time series should be able to return a value for their average and we shouldn't
+        # get any EmptyTimeSeries exceptions.
+        self._fast_poll_tasks()
+
+        next_fast_poll_time = 0
+        fast_iteration = -1
+        
+        while not self._exit_requested:  # loop until we're told not to
+            
+            while (time.time() < next_fast_poll_time):
+                time.sleep(self._fast_poll_interval / 10) # wait for the poll time to come up
+            
+            next_fast_poll_time = time.time() + self._fast_poll_interval
+            fast_iteration += 1
+            
+            ############# Fast Interval Stuff #######################
+            self._fast_poll_tasks()           
+            
+            ############# Medium Interval Stuff #####################
+            if (fast_iteration % self._med_poll_multiple == 0):
+                self._medium_poll_tasks()
+            
+            ############# Slow Interval Stuff #######################
+            if (fast_iteration % self._slow_poll_multiple == 0):
+                self._slow_poll_tasks()
+
+            ##=====================Database Stuff====================
+            # Note: the database operations are down here after the polling operations
+            # to ensure that everything is polled at least once before we try to push
+            # anything to the database
+            ############# Fast Interval Stuff #######################
+            self._fast_database_tasks()
+                        
+            ############# Medium Interval Stuff #####################
+            if (fast_iteration % self._med_poll_multiple == 0):
+                self._medium_database_tasks()
+            
+            ############# Slow Interval Stuff #######################
+            if (fast_iteration % self._slow_poll_multiple == 0):
+                self._slow_database_tasks()
+                        
+        # end of main while loop
+    # end of run() 
+
+
+    def _fast_poll_tasks(self):
+        '''
+        Retrieves all the values we need to get from the controller at the fast interval.
+        '''
+        ##Virtual Disk Statistics 
+        vd_stats = SFAVirtualDiskStatistics.getAll()
+        self._vd_stats = { } # erase the old _vd_stats dictionary
+        for stats in vd_stats:
+            index = stats.Index
+
+            # Save the entire object (mainly for its I/O latency and request
+            # size arrays
+            self._vd_stats[self._vd_to_lun[index]] = stats
+            
+            # Note: we actually get back 2 element lists - one element
+            # for each controller in the couplet.  In theory, one of those
+            # elements should always be 0.
+            self._time_series['lun_read_iops'][self._vd_to_lun[index]].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+            self._time_series['lun_write_iops'][self._vd_to_lun[index]].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+            self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]].append(
+                    (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
+            # Note: converted to bytes
+
+            self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]].append(
+                    (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
+            # Note: converted to bytes 
+
+            self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]].append(
+                    stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
+
+        ##Disk Statistics
+        disk_stats = SFADiskDriveStatistics.getAll()
+        for stats in disk_stats:
+            index = stats.Index
+
+            # Note: we actually get back 2 element lists - one element
+            # for each controller in the couplet.  In theory, one of those
+            # elements should always be 0.
+            self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+            self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+            self._time_series['dd_transfer_bytes'][index].append(
+                    (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
+            # Note: converted to bytes
+
+
+    def _medium_poll_tasks(self):
+        '''
+        Retrieves all the values we need to get from the controller at the medium interval.
+        ''' 
+        # Update the LUN to virtual disk map.  (We probably don't
+        # need to do this very often, but it's not a lot of work
+        # and this way if an admin ever makes any changes, they'll
+        # show up fairly quickly
+        self._update_lun_map()
+
+
+    def _slow_poll_tasks(self):
+        '''
+        Retrieves all the values we need to get from the controller at the fast interval.
+        '''
+        pass # no slow poll tasks yet
 
     
-    def is_connected(self):
+    def _fast_database_tasks(self):
         '''
-        Returns True if the instance is connected to the DDN controller, logged in and able
-        to communicate with it.
+        Update all the values in the database that need to be updated at the fast rate.
         '''
-        return self._sfa_connected
-           
-    def _get_host_name(self):
-        '''
-        Mostly a convenience function so we can map an object back to a
-        human-readable name.
-        ''' 
-        return self._address
+        lun_nums = self._get_lun_nums()
+        for lun_num in lun_nums:
+            try:
+                read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 60)
+                write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 60)
+                bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
+                fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
+                fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
+                self._db.update_lun_table(self._get_host_name(), lun_num, bandwidth[0],
+                                   read_iops[0], write_iops[0], fw_bandwidth[0],
+                                   fw_iops[0])
+            except EmptyTimeSeriesException:
+                print "Skipping empty time series for host %s, virtual disk %d"% \
+                        (self._get_host_name(), lun_num)
 
-    def _get_lun_nums(self):
-        '''
-        Returns a sorted list of all the lun numbers this client has
-        '''
-        return sorted(self._vd_to_lun.values())
 
-    def _get_dd_nums(self):
+        dd_nums = self._get_dd_nums()
+        for dd_num in dd_nums:
+            try:
+                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
+                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
+                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
+                self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
+                                   read_iops[0], write_iops[0])
+            except EmptyTimeSeriesException:
+                print "Skipping empty time series for host %s, disk drive %d"% \
+                      (self._get_host_name(), dd_num)
+
+
+    def _medium_database_tasks(self):
         '''
-        Returns a sorted list of all the disk drive indexes this client has
+        Update all the values in the database that need to be updated at the medium rate.
         '''
-        return sorted(self._time_series['dd_read_iops'])
+        lun_nums = self._get_lun_nums()
+        for lun_num in lun_nums:
+            request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
+            self._db.update_lun_request_size_table( self._get_host_name(), lun_num, True, request_values)
+            request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
+            self._db.update_lun_request_size_table( self._get_host_name(), lun_num, False, request_values)
+            request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
+            self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, True, request_values)
+            request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
+            self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, False, request_values)
+
+        dd_nums = self._get_dd_nums()
+        for dd_num in dd_nums:
+            request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
+            self._db.update_dd_request_size_table( self._get_host_name(), dd_num, True, request_values)
+            request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
+            self._db.update_dd_request_size_table( self._get_host_name(), dd_num, False, request_values)
+            request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
+            self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, True, request_values)
+            request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
+            self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, False, request_values)
+
         
-
-    def _get_time_series_average( self, series_name, device_num, span):
+    def _slow_database_tasks(self):
         '''
-        Return the average value for the specified series and device
-        calculated over the specified number of seconds.
-
-        Returns a tuple: first value is the calculated average, second
-        value is the actual timespan (in seconds) used to calculate
-        the average.
+        Update all the values in the database that need to be updated at the slow rate.
         '''
-        #TODO: need some protection against 'key not found' type of
-        #errors for both the series name and device number
-        return self._time_series[series_name][device_num].average(span)
+        pass  # no slow tasks yet
+
+
+    def _parse_config_file(self, conf_file):
+        '''
+        Opens up the specified config file and reads settings for SFA & database
+        access and polling intervals.
+        '''
+         
+        config = ConfigParser.ConfigParser()
+        config.read(conf_file)
+    
+        # Get the polling intervals from the config file
+        self._fast_poll_interval = config.getfloat('polling', 'fast_poll_interval')
+        self._med_poll_multiple = config.getint('polling', 'med_poll_multiple')
+        self._slow_poll_multiple = config.getint('polling', 'slow_poll_multiple')
+        # fast_poll_interval is in seconds.  medium and slow are multiples of the
+        # fast interval.  For example, values of 2.0, 15 & 60 will result in
+        # polling every 2 seconds, 30 seconds and 2 minutes for fast, medium
+        # and slow, respectively
+
+        # Parameters for connecting to the SFA hardware
+        self._sfa_user = config.get('ddn_hardware', 'sfa_user')
+        self._sfa_password = config.get('ddn_hardware', 'sfa_password')
+        
+        # Parameters for connecting to the database
+        self._db_user = config.get('database', 'db_user')
+        self._db_password = config.get('database', 'db_password')
+        self._db_host = config.get('database', 'db_host')
+        self._db_name = config.get('database', 'db_name')
 
 
     def _time_series_init(self):
@@ -222,178 +387,49 @@ class SFAClient():
                         "Unexpected IO latency index labels for %s disk drive %d" % \
                                 (self.get_host_name(), stats.Index))
 
-        
-
-    def run(self):
-        '''
-        Main loop: polls the SFA, post-processes the data, publish it to the database.  Runs forever.
-        '''
-  
-        next_fast_poll_time = 0
-        fast_iteration = -1
-        
-        while not self._exit_requested:  # loop until we're told not to
-            
-            while (time.time() < next_fast_poll_time):
-                time.sleep(self._fast_poll_interval / 10) # wait for the poll time to come up
-            
-            next_fast_poll_time = time.time() + self._fast_poll_interval
-            fast_iteration += 1
-            
-            ############# Fast Interval Stuff #######################
-
-            ##Virtual Disk Statistics 
-            vd_stats = SFAVirtualDiskStatistics.getAll()
-            self._vd_stats = { } # erase the old _vd_stats dictionary
-            for stats in vd_stats:
-                index = stats.Index
-
-                # Save the entire object (mainly for its I/O latency and request
-                # size arrays
-                self._vd_stats[self._vd_to_lun[index]] = stats
-                
-                # Note: we actually get back 2 element lists - one element
-                # for each controller in the couplet.  In theory, one of those
-                # elements should always be 0.
-                self._time_series['lun_read_iops'][self._vd_to_lun[index]].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                self._time_series['lun_write_iops'][self._vd_to_lun[index]].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]].append(
-                        (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
-                # Note: converted to bytes
-
-                self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]].append(
-                        (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
-                # Note: converted to bytes 
-
-                self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]].append(
-                        stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
-
-
-            ##Disk Statistics
-            disk_stats = SFADiskDriveStatistics.getAll()
-            for stats in disk_stats:
-                index = stats.Index
-
-                # Note: we actually get back 2 element lists - one element
-                # for each controller in the couplet.  In theory, one of those
-                # elements should always be 0.
-                self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-                self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-                self._time_series['dd_transfer_bytes'][index].append(
-                        (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
-                # Note: converted to bytes
-
-            
-            ############# Medium Interval Stuff #####################
-            if (fast_iteration % self._med_poll_multiple == 0):
-                # Update the LUN to virtual disk map.  (We probably don't
-                # need to do this very often, but it's not a lot of work
-                # and if an admin ever makes any changes, they'll show up
-                # fairly quickly
-                self._update_lun_map()
-            
-            ############# Slow Interval Stuff #######################
-            if (fast_iteration % self._slow_poll_multiple == 0):
-                # TODO: implement slow interval stuff
-                pass
-
-            ##=====================Database Stuff====================
-            # Note: the database operations are down here after the polling operations
-            # to ensure that everything is polled at least once before we try to push
-            # anything to the database
-            ############# Fast Interval Stuff #######################
-            lun_nums = self._get_lun_nums()
-            for lun_num in lun_nums:
-                try:
-                    read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 60)
-                    write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 60)
-                    bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
-                    fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
-                    fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
-                    self._db.update_lun_table(self._get_host_name(), lun_num, bandwidth[0],
-                                       read_iops[0], write_iops[0], fw_bandwidth[0],
-                                       fw_iops[0])
-                except EmptyTimeSeriesException:
-                    print "Skipping empty time series for host %s, virtual disk %d"% \
-                            (self._get_host_name(), lun_num)
-
-
-            dd_nums = self._get_dd_nums()
-            for dd_num in dd_nums:
-                try:
-                    read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
-                    write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
-                    bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
-                    self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
-                                       read_iops[0], write_iops[0])
-                except EmptyTimeSeriesException:
-                    print "Skipping empty time series for host %s, disk drive %d"% \
-                          (self._get_host_name(), dd_num)
-            
-            ############# Medium Interval Stuff #####################
-            if (fast_iteration % self._med_poll_multiple == 0):
-                lun_nums = self._get_lun_nums()
-                for lun_num in lun_nums:
-                    request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
-                    self._db.update_lun_request_size_table( self._get_host_name(), lun_num, True, request_values)
-                    request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
-                    self._db.update_lun_request_size_table( self._get_host_name(), lun_num, False, request_values)
-                    request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
-                    self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, True, request_values)
-                    request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
-                    self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, False, request_values)
-
-                dd_nums = self._get_dd_nums()
-                for dd_num in dd_nums:
-                    request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
-                    self._db.update_dd_request_size_table( self._get_host_name(), dd_num, True, request_values)
-                    request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
-                    self._db.update_dd_request_size_table( self._get_host_name(), dd_num, False, request_values)
-                    request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
-                    self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, True, request_values)
-                    request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
-                    self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, False, request_values)
-
-            
-            ############# Slow Interval Stuff #######################
-            if (fast_iteration % self._slow_poll_multiple == 0):
-                # TODO: implement slow interval stuff
-                pass
-            
-            
-        # end of main while loop
-    # end of run() 
-            
-    def _parse_config_file(self, conf_file):
-        '''
-        Opens up the specified config file and reads settings for SFA & database
-        access and polling intervals.
-        '''
-         
-        config = ConfigParser.ConfigParser()
-        config.read(conf_file)
     
-        # Get the polling intervals from the config file
-        self._fast_poll_interval = config.getfloat('polling', 'fast_poll_interval')
-        self._med_poll_multiple = config.getint('polling', 'med_poll_multiple')
-        self._slow_poll_multiple = config.getint('polling', 'slow_poll_multiple')
-        # fast_poll_interval is in seconds.  medium and slow are multiples of the
-        # fast interval.  For example, values of 2.0, 15 & 60 will result in
-        # polling every 2 seconds, 30 seconds and 2 minutes for fast, medium
-        # and slow, respectively
+    def _get_host_name(self):
+        '''
+        Mostly a convenience function so we can map an object back to a
+        human-readable name.
+        ''' 
+        return self._address
 
-        # Parameters for connecting to the SFA hardware
-        self._sfa_user = config.get('ddn_hardware', 'sfa_user')
-        self._sfa_password = config.get('ddn_hardware', 'sfa_password')
+    def _get_lun_nums(self):
+        '''
+        Returns a sorted list of all the lun numbers this client has
+        '''
+        return sorted(self._vd_to_lun.values())
+
+    def _get_dd_nums(self):
+        '''
+        Returns a sorted list of all the disk drive indexes this client has
+        '''
+        return sorted(self._time_series['dd_read_iops'])
         
-        # Parameters for connecting to the database
-        self._db_user = config.get('database', 'db_user')
-        self._db_password = config.get('database', 'db_password')
-        self._db_host = config.get('database', 'db_host')
-        self._db_name = config.get('database', 'db_name')
 
-     
-     
+    def _get_time_series_average( self, series_name, device_num, span):
+        '''
+        Return the average value for the specified series and device
+        calculated over the specified number of seconds.
+
+        Returns a tuple: first value is the calculated average, second
+        value is the actual timespan (in seconds) used to calculate
+        the average.
+        '''
+        #TODO: need some protection against 'key not found' type of
+        #errors for both the series name and device number
+        return self._time_series[series_name][device_num].average(span)
+
+                
+    def _update_lun_map( self):
+        presentations = SFAPresentation.getAll()
+        for p in presentations:
+            self._vd_to_lun[p.VirtualDiskIndex] = p.LUN
+
+# NOTE: this function is commented out for now while I decide upon the best way to
+# deal with exceptions thrown during the connection process.  At the moment, I'm
+# just calling APIConnect() directly and passing any exceptions up the stack.     
 #    def _sfa_connect(self):
 #        '''
 #        Log in to the DDN hardware
@@ -409,20 +445,4 @@ class SFAClient():
 #            pass
 #        #except CIMError, e:
 #        #    pass
-
-    def _sfa_connect(self):
-        # This is something of a hack - I think it might actually be better
-        # to pass any exceptions APIConnect() throws up the stack.
-        # Not sure yet...
-        APIConnect( self._uri, (self._sfa_user, self._sfa_password))
-        # Note: this will throw an exception if it can't connect
-        # Known exceptions:
-        # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
-        # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
-                
-    def _update_lun_map( self):
-        presentations = SFAPresentation.getAll()
-        for p in presentations:
-            self._vd_to_lun[p.VirtualDiskIndex] = p.LUN
-
 

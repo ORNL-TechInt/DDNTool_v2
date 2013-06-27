@@ -107,18 +107,6 @@ class SFAClient():
         ''' 
         return self._address
 
-    def get_time_series_names(self):
-        '''
-        Returns a sorted list of the names of the time series
-        '''
-        self._lock.acquire()
-        try:
-            names = sorted(self._time_series)
-        finally:
-            self._lock.release()
-
-        return names
-
     def _get_lun_nums(self):
         '''
         Returns a sorted list of all the lun numbers this client has
@@ -376,11 +364,6 @@ class SFAClient():
         # end of main while loop
     # end of run() 
             
-    # other getters we're going to want:
-    # - rebuild and verify bandwidth (not available in the API yet)
-    # - "Tier Delay"  - no such command in the API.  Will have to compute it from other values
-    # 
-     
     def _parse_config_file(self, conf_file):
         '''
         Opens up the specified config file and reads settings for SFA & database

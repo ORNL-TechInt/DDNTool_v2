@@ -15,8 +15,6 @@ import multiprocessing
 import SFAClient
 import SFADatabase
 
-from SFATimeSeries import EmptyTimeSeriesException
-
 ###### Remote Debugging using winpdb #######
 import rpdb2
 #rpdb2.start_embedded_debugger('xmr')
@@ -44,20 +42,13 @@ def one_controller(host, conf_file):
         print "Process ", host, " is exiting."
 
     
-    
-    
-     
-
 def main_func():
-    
     # Quick summary:
     # Parse command line args
     # Open & parse the config file
     # If requested, open the DB and init the tables
     # Fork off a process for each controller in the config file
     
-    
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--conf_file",
                         help="Specify the name of the configuration file.  (Default is '" + 
@@ -73,7 +64,6 @@ def main_func():
     config.read(main_args.conf_file)
     
     try:
-        
         # Initialize the database if requested
         if  main_args.init_db:
             print "Initializing the the database..."
@@ -83,7 +73,6 @@ def main_func():
             db_name = config.get('database', 'db_name')
             db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, main_args.init_db)
             db = None  # don't actually need the db connection.  Just wanted to run the init code
-
 
         # Fork a process for each controller in the config file
         sfa_processes = [] # holds the process objects, not SFAClient objects!
@@ -96,8 +85,6 @@ def main_func():
             print "Starting background process for", host
             p.start()
             
- 
- 
         # all the real work is done in the background processes, so we're
         # just going to sit here and wait
         for p in sfa_processes:
@@ -108,10 +95,6 @@ def main_func():
         pass
     finally:
         print "Shutting down DDNTool"
-        # the multiprocessing library should automatically kill all the
-        # background processes when the main process exits.  That's why
-        # we set the daemon flag to False above.
-
         
 ############ End of main_func() #####################
 

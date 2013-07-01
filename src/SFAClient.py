@@ -70,8 +70,8 @@ class SFAClient():
 
         # LUN to virtual disk map
         # The statistics objects deal with virtual disks, but we want to display
-        # everything as LUN's.  This maps one to the other.  (It's updated
-        # at the medium frequency.)
+        # everything as LUN's.  This maps one to the other.  (VD index is the key,
+        # LUN number is the value.) It's updated at the medium frequency.
         self._vd_to_lun = { }
 
         # open a connection to the database
@@ -213,8 +213,8 @@ class SFAClient():
         '''
         Update all the values in the database that need to be updated at the fast rate.
         '''
-        lun_nums = self._get_lun_nums()
-        for lun_num in lun_nums:
+
+        for lun_num in self._vd_to_lun.values():
             try:
                 read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 60)
                 write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 60)
@@ -230,8 +230,7 @@ class SFAClient():
 
 
 # It turns out that we don't care about the per-disk iops & bandwidth
-#        dd_nums = self._get_dd_nums()
-#        for dd_num in dd_nums:
+#        for dd_num in self._dd_stats.keys():
 #            try:
 #                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
 #                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
@@ -247,8 +246,7 @@ class SFAClient():
         '''
         Update all the values in the database that need to be updated at the medium rate.
         '''
-        lun_nums = self._get_lun_nums()
-        for lun_num in lun_nums:
+        for lun_num in self._vd_to_lun.values():
             request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
             self._db.update_lun_request_size_table( self._get_host_name(), lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
@@ -258,8 +256,7 @@ class SFAClient():
             request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
             self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, False, request_values)
 
-        dd_nums = self._get_dd_nums()
-        for dd_num in dd_nums:
+        for dd_num in self._dd_stats.keys():
             request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
             self._db.update_dd_request_size_table( self._get_host_name(), dd_num, True, request_values)
             request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
@@ -403,18 +400,6 @@ class SFAClient():
         ''' 
         return self._address
 
-    def _get_lun_nums(self):
-        '''
-        Returns a sorted list of all the lun numbers this client has
-        '''
-        return sorted(self._vd_to_lun.values())
-
-    def _get_dd_nums(self):
-        '''
-        Returns a sorted list of all the disk drive indexes this client has
-        '''
-        return sorted(self._time_series['dd_read_iops'])
-        
 
     def _get_time_series_average( self, series_name, device_num, span):
         '''

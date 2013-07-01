@@ -171,17 +171,18 @@ class SFAClient():
                     stats.ForwardedIOs[0] + stats.ForwardedIOs[1])
 
         ##Disk Statistics
-        disk_stats = SFADiskDriveStatistics.getAll()
-        for stats in disk_stats:
-            index = stats.Index
-
-            # Note: we actually get back 2 element lists - one element
-            # for each controller in the couplet.  In theory, one of those
-            # elements should always be 0.
-            self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
-            self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
-            self._time_series['dd_transfer_bytes'][index].append(
-                    (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
+# Disabling this code because we don't need it at the fast rate.
+#        disk_stats = SFADiskDriveStatistics.getAll()
+#        for stats in disk_stats:
+#            index = stats.Index
+#
+#            # Note: we actually get back 2 element lists - one element
+#            # for each controller in the couplet.  In theory, one of those
+#            # elements should always be 0.
+#            self._time_series['dd_read_iops'][index].append(stats.ReadIOs[0] + stats.ReadIOs[1])
+#            self._time_series['dd_write_iops'][index].append(stats.WriteIOs[0] + stats.WriteIOs[1])
+#            self._time_series['dd_transfer_bytes'][index].append(
+#                    (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
             # Note: converted to bytes
 
 
@@ -194,6 +195,11 @@ class SFAClient():
         # and this way if an admin ever makes any changes, they'll
         # show up fairly quickly
         self._update_lun_map()
+
+        # Grab the disk drive stats objects (for the request size & latency data)        
+        disk_stats = SFADiskDriveStatistics.getAll()
+        for stats in disk_stats:
+            index = stats.Index
 
 
     def _slow_poll_tasks(self):
@@ -223,17 +229,18 @@ class SFAClient():
                         (self._get_host_name(), lun_num)
 
 
-        dd_nums = self._get_dd_nums()
-        for dd_num in dd_nums:
-            try:
-                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
-                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
-                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
-                self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
-                                   read_iops[0], write_iops[0])
-            except EmptyTimeSeriesException:
-                print "Skipping empty time series for host %s, disk drive %d"% \
-                      (self._get_host_name(), dd_num)
+# It turns out that we don't care about the per-disk iops & bandwidth
+#        dd_nums = self._get_dd_nums()
+#        for dd_num in dd_nums:
+#            try:
+#                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
+#                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
+#                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
+#                self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
+#                                   read_iops[0], write_iops[0])
+#            except EmptyTimeSeriesException:
+#                print "Skipping empty time series for host %s, disk drive %d"% \
+#                      (self._get_host_name(), dd_num)
 
 
     def _medium_database_tasks(self):
@@ -330,16 +337,17 @@ class SFAClient():
             self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
             self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
 
-        disk_stats = SFADiskDriveStatistics.getAll()
-        self._time_series['dd_read_iops'] = { }
-        self._time_series['dd_write_iops'] = { }
-        self._time_series['dd_transfer_bytes'] = { }
-        for stats in disk_stats:
-            index = stats.Index
-            self._dd_stats[index] = stats
-            self._time_series['dd_read_iops'][index] = SFATimeSeries( 300)
-            self._time_series['dd_write_iops'][index] = SFATimeSeries( 300)
-            self._time_series['dd_transfer_bytes'][index] = SFATimeSeries( 300)
+# Don't need per-disk bandwidth & iops
+#       disk_stats = SFADiskDriveStatistics.getAll()
+#       self._time_series['dd_read_iops'] = { }
+#       self._time_series['dd_write_iops'] = { }
+#       self._time_series['dd_transfer_bytes'] = { }
+#       for stats in disk_stats:
+#           index = stats.Index
+#           self._dd_stats[index] = stats
+#           self._time_series['dd_read_iops'][index] = SFATimeSeries( 300)
+#           self._time_series['dd_write_iops'][index] = SFATimeSeries( 300)
+#           self._time_series['dd_transfer_bytes'][index] = SFATimeSeries( 300)
 
         
 

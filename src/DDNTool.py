@@ -15,6 +15,8 @@ import multiprocessing
 import SFAClient
 import SFADatabase
 
+from bracket_expand import bracket_expand, bracket_aware_split
+
 ###### Remote Debugging using winpdb #######
 import rpdb2
 #rpdb2.start_embedded_debugger('xmr')
@@ -76,7 +78,9 @@ def main_func():
 
         # Fork a process for each controller in the config file
         sfa_processes = [] # holds the process objects, not SFAClient objects!
-        sfa_hosts = [ host.strip() for host in config.get('ddn_hardware', 'sfa_hosts').split(",") ]
+        sfa_hosts = [ host.strip() for host in
+                bracket_aware_split(config.get('ddn_hardware', 'sfa_hosts')) ]
+        bracket_expand( sfa_hosts)
         for host in sfa_hosts:
             p = multiprocessing.Process(name='DDNTool_' + host, target=one_controller,
                                         args=(host, main_args.conf_file))

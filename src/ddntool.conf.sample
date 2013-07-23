@@ -21,7 +21,13 @@ slow_poll_multiple = 60  ; multiples of _fast_poll_interval
 
 
 [ddn_hardware]
-sfa_hosts=sultan-12k1, sultan-12k2
+# hosts can be specified with bracket expressions
+# ex: sultan-12k[1-5][a,b,c] would expand into 15 separate hosts:
+# sultan12k1a through sultan12k5c
+# Commas can still be used outside of brackets, so 
+# sultan-12k[1-5][a,b,c],emperor-1,emperor-2
+# would expand into 17 hosts total.
+sfa_hosts=sultan-12k[1-2]
 #sfa_hosts=sultan-12k1
 sfa_user=user
 sfa_password=user

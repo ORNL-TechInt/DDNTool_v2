@@ -79,7 +79,7 @@ class SFAClient():
                                            self._db_host, self._db_name, False)
         
         # connect to the SFA controller
-        APIConnect( self._uri, (self._sfa_user, self._sfa_password))        
+        APIConnect( self._uri, (self._sfa_user, self._sfa_password))        # @UndefinedVariable
 
         self._time_series_init()
         self._check_labels() # verify the labels for the request sizes and latencies
@@ -145,7 +145,7 @@ class SFAClient():
         Retrieves all the values we need to get from the controller at the fast interval.
         '''
         ##Virtual Disk Statistics 
-        vd_stats = SFAVirtualDiskStatistics.getAll()
+        vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
         self._vd_stats = { } # erase the old _vd_stats dictionary
         for stats in vd_stats:
             index = stats.Index
@@ -197,7 +197,7 @@ class SFAClient():
         self._update_lun_map()
 
         # Grab the disk drive stats objects (for the request size & latency data)        
-        disk_stats = SFADiskDriveStatistics.getAll()
+        disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
         for stats in disk_stats:
             index = stats.Index
 
@@ -315,7 +315,7 @@ class SFAClient():
         self._update_lun_map()
 
         # initialize the time series arrays
-        vd_stats = SFAVirtualDiskStatistics.getAll()
+        vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
         self._time_series['lun_read_iops'] = { }
         self._time_series['lun_write_iops'] = { }
         self._time_series['lun_transfer_bytes'] = { }
@@ -369,7 +369,7 @@ class SFAClient():
                 'Latency Counts <=1s', 'Latency Counts <=2s', 'Latency Counts <=4s',
                 'Latency Counts >4s']
 
-        vd_stats = SFAVirtualDiskStatistics.getAll()
+        vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
         for stats in vd_stats:
             if stats.IOSizeIndexLabels != expected_size_labels:
                 raise UnexpectedClientDataException(
@@ -379,7 +379,7 @@ class SFAClient():
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
                                 (self.get_host_name(), stats.Index))
-        disk_stats = SFADiskDriveStatistics.getAll()
+        disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
         # NOTE: getAll() is particularly slow for SFADiskDriveStatistics.  Might want to consider
         # caching this value. (It's fetched up in _time_series_init())
         for stats in disk_stats:
@@ -416,7 +416,7 @@ class SFAClient():
 
                 
     def _update_lun_map( self):
-        presentations = SFAPresentation.getAll()
+        presentations = SFAPresentation.getAll()  # @UndefinedVariable
         for p in presentations:
             self._vd_to_lun[p.VirtualDiskIndex] = p.LUN
 

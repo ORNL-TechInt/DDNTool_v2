@@ -7,6 +7,8 @@ Created on Mar 22, 2013
 import time
 import ConfigParser
 
+import logging
+
 import SFADatabase
 from SFATimeSeries import SFATimeSeries
 from SFATimeSeries import EmptyTimeSeriesException
@@ -36,7 +38,11 @@ class SFAClient():
         '''
         Constructor
         '''
-        
+
+        # Get the logger object
+        self.logger = logging.getLogger( 'SFAClient_%s'%address)
+        self.logger.debug( 'Creating instance of SFAClient')
+                
         # parameters for accessing the SFA hardware       
         self._address = address 
         self._uri = "https://" + address
@@ -90,6 +96,9 @@ class SFAClient():
         '''
         Main loop: polls the SFA, post-processes the data, publish it to the database.  Runs forever.
         '''
+        
+        self.logger.debug( 'Starting main loop')
+        
         # Run the fast poll stuff once right away.  The reason has to do with the time
         # series data:  in order to calculate an average, we need 2 data points.  Calling
         # the fast poll tasks now loads the first data point in all the series.  The second
@@ -130,10 +139,12 @@ class SFAClient():
                         
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):
+                self.logger.debug( 'Executing medium rate DB tasks')
                 self._medium_database_tasks()
             
             ############# Slow Interval Stuff #######################
             if (fast_iteration % self._slow_poll_multiple == 0):
+                self.logger.debug( 'Executing slow rate DB tasks')
                 self._slow_database_tasks()
                         
         # end of main while loop
@@ -439,3 +450,4 @@ class SFAClient():
 #        #except CIMError, e:
 #        #    pass
 
+        

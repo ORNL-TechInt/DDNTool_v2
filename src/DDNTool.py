@@ -11,6 +11,7 @@ import ConfigParser
 import time
 import argparse
 import multiprocessing
+import logging
 
 import SFAClient
 import SFADatabase
@@ -59,6 +60,10 @@ def main_func():
     parser.add_argument('-i', '--init_db',
                         help='Initialize the database on startup.',
                         action='store_true');
+    
+    parser.add_argument( '-d', '--debug_log',
+                         help="Specify the name of a debug log file",
+                         default=None)
 
     main_args = parser.parse_args()
 
@@ -66,9 +71,20 @@ def main_func():
     config.read(main_args.conf_file)
     
     try:
+        # Set up logging
+        if main_args.debug_log:
+            logging.basicConfig(format='%(asctime)s - %(name)s: - %(levelname)s - %(message)s',
+                                filename=main_args.debug_log, level=logging.DEBUG)
+            logger = logging.getLogger(__name__)
+        else:
+            logging.basicConfig(level=logging.CRITICAL)
+            logger = logging.getLogger(__name__)
+            #TODO: Find a better way to disable logging...
+        
         # Initialize the database if requested
         if  main_args.init_db:
             print "Initializing the the database..."
+            logger.debug( "Initializing the the database...")
             db_user = config.get('database', 'db_user')
             db_password = config.get('database', 'db_password')
             db_host = config.get('database', 'db_host')
@@ -82,11 +98,13 @@ def main_func():
                 bracket_aware_split(config.get('ddn_hardware', 'sfa_hosts')) ]
         bracket_expand( sfa_hosts)
         for host in sfa_hosts:
+            logger.debug( "Creating process for host '%s'"%host)
             p = multiprocessing.Process(name='DDNTool_' + host, target=one_controller,
                                         args=(host, main_args.conf_file))
             p.daemon = False
             sfa_processes.append(p)
             print "Starting background process for", host
+            logger.debug( "Starting background process for host '%s'"%host)
             p.start()
             
         # all the real work is done in the background processes, so we're

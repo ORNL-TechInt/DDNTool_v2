@@ -4,7 +4,7 @@
 # Expects a list of strings containing bracket expressions such as:
 # "name[1-3][a,b]"
 # and expands them into a (longer) list of strings with the bracket
-# expressions evalutated.  The above example would be expanded to:
+# expressions evaluated.  The above example would be expanded to:
 # "name1a", "name2a", "name3a", "name1b", "name2b", "name3b",
 # "name1c", "name2c", "name3c"
 #
@@ -25,6 +25,10 @@
 # Bracket expressions may not be nested!
 #
 # No guarantees are made about the order of the results.
+#
+# Note: This file is its own unit-test.  (See the 
+# "if __name__=='__main__'" test at the bottom.)
+
 
 class BracketGrammarError(Exception):
     "Used to indicate an improper bracket expression of some kind"
@@ -67,7 +71,7 @@ def bracket_expand( thelist):
 
 def bracket_aware_split( thestring):
     '''
-    Similar to the regualar <string>.split(',') function, but is aware of
+    Similar to the regular <string>.split(',') function, but is aware of
     bracket expressions and won't trigger on commas inside of them.
     '''
     out = []

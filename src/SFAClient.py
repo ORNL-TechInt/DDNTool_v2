@@ -55,6 +55,7 @@ class SFAClient():
         
         # open up the config file and grab settings for the database and
         # polling intervals
+        self.logger.debug( 'Parsing config file')
         self._parse_config_file( conf_file)
         
         # Time series data
@@ -81,15 +82,21 @@ class SFAClient():
         self._vd_to_lun = { }
 
         # open a connection to the database
+        self.logger.debug( 'Opening DB connection')
         self._db = SFADatabase.SFADatabase(self._db_user, self._db_password,
                                            self._db_host, self._db_name, False)
         
         # connect to the SFA controller
+        self.logger.debug( 'Connecting to DDN hardware')
         APIConnect( self._uri, (self._sfa_user, self._sfa_password))        # @UndefinedVariable
+        self.logger.debug( 'Connection established.')
 
+        self.logger.debug( 'Calling _time_series_init()')
         self._time_series_init()
+        self.logger.debug( '_time_series_init() completed.  Calling _check_labels()')
         self._check_labels() # verify the labels for the request sizes and latencies
-                             # match what we've hard-coded into the database       
+                             # match what we've hard-coded into the database
+        self.logger.debug( '__init__ completed')
         
         
     def run(self):

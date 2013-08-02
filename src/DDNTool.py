@@ -13,8 +13,7 @@ import argparse
 import multiprocessing
 import logging
 
-import SFAClient
-import SFADatabase
+from SFAClientUtils import SFAClient, SFADatabase
 
 from bracket_expand import bracket_expand, bracket_aware_split
 

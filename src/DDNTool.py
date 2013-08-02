@@ -8,7 +8,6 @@ needed for the S2A hardware.)
 '''
 
 import ConfigParser
-import time
 import argparse
 import multiprocessing
 import logging
@@ -18,7 +17,7 @@ from SFAClientUtils import SFAClient, SFADatabase
 from bracket_expand import bracket_expand, bracket_aware_split
 
 ###### Remote Debugging using winpdb #######
-import rpdb2
+#import rpdb2
 #rpdb2.start_embedded_debugger('xmr')
 # xmr is the session password - make sure port 51000 is open
 # Note: calling stat_embedded_debuger will cause the program execution to
@@ -88,8 +87,10 @@ def main_func():
             db_password = config.get('database', 'db_password')
             db_host = config.get('database', 'db_host')
             db_name = config.get('database', 'db_name')
-            db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, main_args.init_db)
-            db = None  # don't actually need the db connection.  Just wanted to run the init code
+            # don't actually need the db connection, but this is how we force
+            # the db init code to run
+            db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, main_args.init_db)  # @UnusedVariable
+            db = None  # @UnusedVariable
 
         # Fork a process for each controller in the config file
         sfa_processes = [] # holds the process objects, not SFAClient objects!

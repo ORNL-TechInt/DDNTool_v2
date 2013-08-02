@@ -18,10 +18,12 @@ setup (
    
    version      = "2.0Beta",
    url          = "http://www.olcf.ornl.gov", # don't have a web page dedicated to the tool
+
+   requires     = ["ddn.sfa.api (>= 1.5.3)"],
    
    package_dir  = {"":"src"},
-   py_modules   = [ "bracket_expand"],
+   py_modules   = ["bracket_expand"],
    packages     = ["SFAClientUtils" ],
    
-   scripts      = [ "src/DDNTool.py" ], # scripts list isn't affected by the package_dir dict
+   scripts      = ["src/DDNTool.py" ], # scripts list isn't affected by the package_dir dict
 )

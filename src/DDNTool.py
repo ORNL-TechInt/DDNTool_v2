@@ -12,6 +12,7 @@ import ConfigParser
 import argparse
 import multiprocessing
 import logging
+import logging.handlers
 
 from SFAClientUtils import SFAClient, SFADatabase
 
@@ -41,6 +42,8 @@ def one_controller(host, conf_file):
         # Perfectly normal.  Ctrl-C is how we expect to exit
         pass
     finally:
+        logger = logging.getLogger( "DDNTool")
+        logger.info( "Process %s is exiting.", host)
         print "Process ", host, " is exiting."
 
     
@@ -59,10 +62,12 @@ def main_func():
     parser.add_argument('-i', '--init_db',
                         help='Initialize the database on startup.',
                         action='store_true');
-    
-    parser.add_argument( '-d', '--debug_log',
-                         help="Specify the name of a debug log file",
-                         default=None)
+    parser.add_argument('-c', '--console_log',
+                        help='Log to std err.  (Default is to use syslog)',
+                        action='store_true')
+    parser.add_argument( '-d', '--debug',
+                         help="Include debug messages in the log",
+                         action='store_true')
 
     main_args = parser.parse_args()
 
@@ -71,17 +76,39 @@ def main_func():
     
     try:
         # Set up logging
-        if main_args.debug_log:
-            logging.basicConfig(format='%(asctime)s - %(name)s: - %(levelname)s - %(message)s',
-                                filename=main_args.debug_log, level=logging.DEBUG)
-            logger = logging.getLogger(__name__)
+        root_logger = logging.getLogger()
+        if main_args.console_log:
+            console_handler = logging.StreamHandler()
+            # Add a timestamp to logs sent to std err (syslog automatically adds
+            # its own timestamp, so we don't need to include ours in that case)
+            
+            formatter = logging.Formatter('%(asctime)s - %(name)s: - %(levelname)s - %(message)s')
+            console_handler.setFormatter( formatter)
+            root_logger.addHandler( console_handler)
         else:
-            logging.basicConfig(level=logging.CRITICAL)
-            logger = logging.getLogger(__name__)
-            #TODO: Find a better way to disable logging...
+            syslog_handler = logging.handlers.SysLogHandler('/dev/log')
+            formatter = logging.Formatter('%(name)s: - %(levelname)s - %(message)s')
+            syslog_handler.setFormatter( formatter)
+            root_logger.addHandler( syslog_handler)
+
+        if main_args.debug:
+            root_logger.setLevel( logging.DEBUG)
+        else:
+            root_logger.setLevel( logging.INFO)
+            
+            # Disable some of the more excessive log messages that
+            # the DDN API and its supporting libraries emit
+            for log_name in [ 'APIContext', 'pywebm', 'root',
+                              'SFADiskDriveStatistics', 'SFAPresentation',
+                              'SFAVirtualDiskStatistics' ]:
+                temp_log = logging.getLogger( log_name)
+                temp_log.setLevel( logging.WARNING)
+
+        logger = logging.getLogger( "DDNTool")
         
         # Initialize the database if requested
         if  main_args.init_db:
+            logger.info(  "Initializing the the database...")
             print "Initializing the the database..."
             logger.debug( "Initializing the the database...")
             db_user = config.get('database', 'db_user')
@@ -104,8 +131,8 @@ def main_func():
                                         args=(host, main_args.conf_file))
             p.daemon = False
             sfa_processes.append(p)
+            logger.info("Starting background process for %s", host)
             print "Starting background process for", host
-            logger.debug( "Starting background process for host '%s'"%host)
             p.start()
             
         # all the real work is done in the background processes, so we're
@@ -117,6 +144,7 @@ def main_func():
         # Perfectly normal.  Ctrl-C is how we expect to exit
         pass
     finally:
+        logger.info( "Shutting down DDNTool")
         print "Shutting down DDNTool"
         
 ############ End of main_func() #####################

@@ -40,7 +40,7 @@ class SFAClient():
         '''
 
         # Get the logger object
-        self.logger = logging.getLogger( 'SFAClient_%s'%address)
+        self.logger = logging.getLogger( 'DDNTool_SFAClient_%s'%address)
         self.logger.debug( 'Creating instance of SFAClient')
                 
         # parameters for accessing the SFA hardware       

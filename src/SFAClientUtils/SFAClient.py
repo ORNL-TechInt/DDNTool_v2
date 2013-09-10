@@ -15,6 +15,11 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
 
+MINIMUM_FW_VER = '1.5.3.1'
+#MINIMUM_FW_VER = '2.0.0.3'
+# Switch the minimum to 2.0.0.3 once we start using the
+# statistics filtering classes
+
 class UnexpectedClientDataException( Exception):
     '''
     Used when the DDN API sent back data that we weren't expecting
@@ -94,8 +99,8 @@ class SFAClient():
         self.logger.debug( 'Calling _time_series_init()')
         self._time_series_init()
         self.logger.debug( '_time_series_init() completed.  Calling _check_labels()')
-        self._check_labels() # verify the labels for the request sizes and latencies
-                             # match what we've hard-coded into the database
+        self._check_labels()    # verify the labels for the request sizes and latencies
+                                # match what we've hard-coded into the database
         self.logger.debug( '__init__ completed')
         
         
@@ -103,6 +108,11 @@ class SFAClient():
         '''
         Main loop: polls the SFA, post-processes the data, publish it to the database.  Runs forever.
         '''
+        
+        # make sure the firmware is new enough to have the features we need
+        self.logger.debug( 'Verifying Controller Firmware Version')
+        if not self._verify_fw_version():
+            return  # _verify_fw_version will output the necessary lines to the log        
         
         self.logger.debug( 'Starting main loop')
         
@@ -437,6 +447,29 @@ class SFAClient():
         presentations = SFAPresentation.getAll()  # @UndefinedVariable
         for p in presentations:
             self._vd_to_lun[p.VirtualDiskIndex] = p.LUN
+            
+    
+    def _verify_fw_version(self):
+        '''
+        Returns True if the controller firmware version is sufficiently new.
+        Returns False and writes an error to the log if it's not.
+        '''    
+        fw_version = SFAController.getAll()[0].FWRelease  # @UndefinedVariable
+        # DDN version strings are 4 numbers separated by periods
+        
+        fw_nums = fw_version.split('.')
+        min_nums = MINIMUM_FW_VER.split('.')
+        version_too_low = False
+        for i in range(len(fw_nums)):
+            if fw_nums[i] < min_nums[i]:
+                version_too_low = True
+                break
+        
+        if version_too_low:
+            self.logger.error("Controller version '%s' is too old.  Minimum version is '%s'"%(fw_version, MINIMUM_FW_VER))
+        
+        return not version_too_low
+        
 
 # NOTE: this function is commented out for now while I decide upon the best way to
 # deal with exceptions thrown during the connection process.  At the moment, I'm

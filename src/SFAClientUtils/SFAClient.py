@@ -15,8 +15,10 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
 
-MINIMUM_FW_VER = '2.0.0.3'
-# We need 2.0.0.3 for the statistics filtering classes
+MINIMUM_FW_VER = '1.5.3.1'
+#MINIMUM_FW_VER = '2.0.0.3'
+# Switch the minimum to 2.0.0.3 once we start using the
+# statistics filtering classes
 
 class UnexpectedClientDataException( Exception):
     '''

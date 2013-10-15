@@ -26,4 +26,6 @@ setup (
    packages     = ["SFAClientUtils" ],
    
    scripts      = ["src/DDNTool.py" ], # scripts list isn't affected by the package_dir dict
+
+   data_files	= [('/etc/init', ['src/init/DDNTool.conf']),('/etc/', ['src/ddntool.sample.conf'])] # this is the upstart config file and sample configuration file
 )

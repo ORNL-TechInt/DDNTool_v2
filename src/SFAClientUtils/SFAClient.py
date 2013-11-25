@@ -462,7 +462,12 @@ class SFAClient():
         min_nums = MINIMUM_FW_VER.split('.')
         version_too_low = False
         for i in range(len(fw_nums)):
-            if fw_nums[i] < min_nums[i]:
+            if int(fw_nums[i]) > int(min_nums[i]):
+                break   # firmware is new enough
+            if int(fw_nums[i]) == int(min_nums[i]):
+                pass    # firmware *might* be new enough - keep looking
+            elif int(fw_nums[i]) < int(min_nums[i]):
+                # firmware definitely too old
                 version_too_low = True
                 break
         

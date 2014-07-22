@@ -408,11 +408,11 @@ class SFAClient():
             if stats.IOSizeIndexLabels != expected_size_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO size index labels for %s virtual disk %d" % \
-                                (self.get_host_name(), stats.Index))
+                                (self._get_host_name(), stats.Index))
             if stats.IOLatencyIndexLabels != expected_lun_latency_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
-                                (self.get_host_name(), stats.Index))
+                                (self._get_host_name(), stats.Index))
         disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
         # NOTE: getAll() is particularly slow for SFADiskDriveStatistics.  Might want to consider
         # caching this value. (It's fetched up in _time_series_init())
@@ -420,11 +420,11 @@ class SFAClient():
             if stats.IOSizeIndexLabels != expected_size_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO size index labels for %s disk drive %d" % \
-                                (self.get_host_name(), stats.Index))
+                                (self._get_host_name(), stats.Index))
             if stats.IOLatencyIndexLabels != expected_dd_latency_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s disk drive %d" % \
-                                (self.get_host_name(), stats.Index))
+                                (self._get_host_name(), stats.Index))
 
     
     def _get_host_name(self):

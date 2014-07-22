@@ -119,21 +119,22 @@ class SFADatabase(object):
             self._create_schema()
         
  
-    def update_lun_table( self, sfa_client_name, lun_num, transfer_bw,
-                         read_iops, write_iops, forwarded_bw,
-                         forwarded_iops):
+    def update_lun_table( self, sfa_client_name, lun_num, transfer_bytes,
+                          transfer_bw, read_iops, write_iops, forwarded_bw,
+                          forwarded_iops):
         '''
         Updates the row in the lun info table for the specified 
         client and virtual disk.
         '''
 
         replace_query = "REPLACE INTO " + TABLE_NAMES['LUN_TABLE_NAME'] + \
-                "(Hostname, Disk_Num, Transfer_BW, Read_IOPS, Write_IOPS, " \
-                "Forwarded_BW, Forwarded_IOPS) " \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s);"
+                "(Hostname, Disk_Num, Transfer_Bytes, Transfer_BW, " \
+                "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS) " \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s);"
         
         cursor = self._dbcon.cursor()
-        cursor.execute( replace_query, (sfa_client_name, str(lun_num), str(transfer_bw),
+        cursor.execute( replace_query, (sfa_client_name, str(lun_num),
+                                        str(transfer_bytes), str(transfer_bw),
                                         str(read_iops), str(write_iops),
                                         str(forwarded_bw), str(forwarded_iops)))
         cursor.close()
@@ -326,6 +327,7 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["LUN_TABLE_NAME"] + " "  \
         "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
         "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
+        "Transfer_Bytes BIGINT UNSIGNED, " \
         "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
         "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \

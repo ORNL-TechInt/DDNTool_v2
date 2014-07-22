@@ -250,8 +250,13 @@ class SFAClient():
                 bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 10)
                 fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 10)
                 fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 10)
-                self._db.update_lun_table(self._get_host_name(), lun_num, bandwidth[0],
-                                   read_iops[0], write_iops[0], fw_bandwidth[0],
+                
+                # Grab the raw kbytes_transferred value out of the saved stats object
+                tmp_stats = self._vd_stats[lun_num]
+                bytes_transferred = (tmp_stats.KBytesTransferred[0] + tmp_stats.KBytesTransferred[1]) * 1024
+                
+                self._db.update_lun_table(self._get_host_name(), lun_num, bytes_transferred,
+                                   bandwidth[0], read_iops[0], write_iops[0], fw_bandwidth[0],
                                    fw_iops[0])
             except EmptyTimeSeriesException:
                 print "Skipping empty time series for host %s, virtual disk %d"% \

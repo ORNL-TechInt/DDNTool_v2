@@ -46,7 +46,7 @@ PARTIAL_LUN_LATENCY_TABLE_DEF = \
     "Longer_Than_16s INT UNSIGNED NOT NULL, " \
     "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
     "INDEX( Hostname), INDEX( Disk_Num) )" \
-    "ENGINE=HEAP" \
+    "ENGINE=INNODB" \
     ";"
 
 PARTIAL_DD_LATENCY_TABLE_DEF = \
@@ -66,7 +66,7 @@ PARTIAL_DD_LATENCY_TABLE_DEF = \
     "Longer_Than_4s INT UNSIGNED NOT NULL, " \
     "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
     "INDEX( Hostname), INDEX( Disk_Num) )" \
-    "ENGINE=HEAP" \
+    "ENGINE=INNODB" \
     ";"
 
 
@@ -87,7 +87,7 @@ PARTIAL_SIZE_TABLE_DEF = \
     "Larger_Than_4MiB INT UNSIGNED NOT NULL, " \
     "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
     "INDEX( Hostname), INDEX( Disk_Num) )" \
-    "ENGINE=HEAP" \
+    "ENGINE=INNODB" \
     ";"
 
 # Note: We're hard-coding the size and latency buckets rather than trying to get
@@ -332,7 +332,7 @@ class SFADatabase(object):
         "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
         "INDEX( Hostname), INDEX( Disk_Num) )"  \
-        "ENGINE=HEAP" \
+        "ENGINE=INNODB" \
         ";"
 
         self._query_exec( table_def)
@@ -351,7 +351,7 @@ class SFADatabase(object):
         "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
         "INDEX( Hostname), INDEX( Disk_Num) )"  \
-        "ENGINE=HEAP" \
+        "ENGINE=INNODB" \
         ";"
 
         self._query_exec( table_def)

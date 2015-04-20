@@ -79,6 +79,11 @@ class SFAClient():
         # indexed by the disk drive number
         self._vd_stats = {}
         self._dd_stats = {}
+        
+        # Storage pool state
+        # We currently keep only one field from the SFAStoragePool classes: PoolState
+        # The dictionary is indexed by the LUN number of the LUN that is built from the pool.
+        self._storage_pool_states = {}
 
         # LUN to virtual disk map
         # The statistics objects deal with virtual disks, but we want to display
@@ -126,7 +131,9 @@ class SFAClient():
         self._fast_poll_tasks()
 
         next_fast_poll_time = 0
-        fast_iteration = -1
+        fast_iteration = -1 # This is initialized to -1 in order to force us to execute
+                            # the medium and slow poll stuff the first time we pass
+                            # through the while loop.
         
         while not self._exit_requested:  # loop until we're told not to
             
@@ -225,10 +232,21 @@ class SFAClient():
         # show up fairly quickly
         self._update_lun_map()
 
-        # Grab the disk drive stats objects (for the request size & latency data)        
-        disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
-        for stats in disk_stats:
-            index = stats.Index
+        # We need to store the PoolState values (see below) indexed by LUN number.
+        # In order to do that, we need the PoolIndex value from the SFAVirtualDisk objects.
+        virt_disks = SFAVirtualDisk.getAll()  # @UndefinedVariable
+        vd_pool_map = {}
+        for disk in virt_disks:
+            vd_pool_map[disk.PoolIndex] = self._vd_to_lun[disk.Index]
+            
+        # Grab the storage pool data (so we can find out if the pool is in a degraded state)
+        storage_pools = SFAStoragePool.getAll()  # @UndefinedVariable
+        self._storage_pool_states = { } # erase the old _storage_pool_states dictionary
+        for pool in storage_pools:
+            index = pool.Index
+            # Save the PoolState field in the dictionary
+            self._storage_pool_states[vd_pool_map[index]] = pool.PoolState
+        
 
 
     def _slow_poll_tasks(self):
@@ -255,9 +273,13 @@ class SFAClient():
                 tmp_stats = self._vd_stats[lun_num]
                 bytes_transferred = (tmp_stats.KBytesTransferred[0] + tmp_stats.KBytesTransferred[1]) * 1024
                 
+                # Get the pool state we copied out of the associated SFAStoragePool object
+                # Note: this object is only updated at the medium rate
+                pool_state = self._storage_pool_states[lun_num]
+                
                 self._db.update_lun_table(self._get_host_name(), lun_num, bytes_transferred,
                                    bandwidth[0], read_iops[0], write_iops[0], fw_bandwidth[0],
-                                   fw_iops[0])
+                                   fw_iops[0], pool_state)
             except EmptyTimeSeriesException:
                 print "Skipping empty time series for host %s, virtual disk %d"% \
                         (self._get_host_name(), lun_num)

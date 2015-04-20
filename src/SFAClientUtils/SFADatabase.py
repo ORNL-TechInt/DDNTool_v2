@@ -121,7 +121,7 @@ class SFADatabase(object):
  
     def update_lun_table( self, sfa_client_name, lun_num, transfer_bytes,
                           transfer_bw, read_iops, write_iops, forwarded_bw,
-                          forwarded_iops):
+                          forwarded_iops, pool_state):
         '''
         Updates the row in the lun info table for the specified 
         client and virtual disk.
@@ -129,14 +129,15 @@ class SFADatabase(object):
 
         replace_query = "REPLACE INTO " + TABLE_NAMES['LUN_TABLE_NAME'] + \
                 "(Hostname, Disk_Num, Transfer_Bytes, Transfer_BW, " \
-                "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS) " \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s);"
+                "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) " \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s);"
         
         cursor = self._dbcon.cursor()
         cursor.execute( replace_query, (sfa_client_name, str(lun_num),
                                         str(transfer_bytes), str(transfer_bw),
                                         str(read_iops), str(write_iops),
-                                        str(forwarded_bw), str(forwarded_iops)))
+                                        str(forwarded_bw), str(forwarded_iops),
+                                        str(pool_state)))
         cursor.close()
 
     def update_dd_table( self, sfa_client_name, dd_num, transfer_bw,
@@ -330,6 +331,7 @@ class SFADatabase(object):
         "Transfer_Bytes BIGINT UNSIGNED, " \
         "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
         "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
+        "Pool_State INT, " \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
         "INDEX( Hostname), INDEX( Disk_Num) )"  \
         "ENGINE=INNODB" \
@@ -449,3 +451,6 @@ class SFADatabase(object):
         " "  + PARTIAL_DD_LATENCY_TABLE_DEF
         
         self._query_exec( table_def)
+
+
+

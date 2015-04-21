@@ -231,21 +231,24 @@ class SFAClient():
         # and this way if an admin ever makes any changes, they'll
         # show up fairly quickly
         self._update_lun_map()
-
-        # We need to store the PoolState values (see below) indexed by LUN number.
-        # In order to do that, we need the PoolIndex value from the SFAVirtualDisk objects.
-        virt_disks = SFAVirtualDisk.getAll()  # @UndefinedVariable
-        vd_pool_map = {}
-        for disk in virt_disks:
-            vd_pool_map[disk.PoolIndex] = self._vd_to_lun[disk.Index]
-            
+        
         # Grab the storage pool data (so we can find out if the pool is in a degraded state)
+        # Store it in a temporary dictionary, indexed by the pool's Index member
         storage_pools = SFAStoragePool.getAll()  # @UndefinedVariable
-        self._storage_pool_states = { } # erase the old _storage_pool_states dictionary
+        pools_d = { }
         for pool in storage_pools:
-            index = pool.Index
+            pools_d[pool.Index] = pool
+        
+        self._storage_pool_states = { } # erase the old _storage_pool_states dictionary    
+
+        # Now, get all the virtual disks and map them back to the pool they're created
+        # from.  (For now, we just want the pool state, not the whole SFAStoragePool object)
+        virt_disks = SFAVirtualDisk.getAll()  # @UndefinedVariable
+        for disk in virt_disks:
             # Save the PoolState field in the dictionary
-            self._storage_pool_states[vd_pool_map[index]] = pool.PoolState
+            self._storage_pool_states[self._vd_to_lun[disk.Index]] = pools_d[disk.PoolIndex].PoolState
+        
+
         
 
 
@@ -275,7 +278,12 @@ class SFAClient():
                 
                 # Get the pool state we copied out of the associated SFAStoragePool object
                 # Note: this object is only updated at the medium rate
-                pool_state = self._storage_pool_states[lun_num]
+                try:
+                    pool_state = self._storage_pool_states[lun_num]
+                except KeyError:
+                    self.logger.error( "No storage pool states mapped to LUN number %d!!"%lun_num)
+                    self.logger.error( "Setting pool state to UNKNOWN!")
+                    pool_state = 255
                 
                 self._db.update_lun_table(self._get_host_name(), lun_num, bytes_transferred,
                                    bandwidth[0], read_iops[0], write_iops[0], fw_bandwidth[0],
@@ -475,6 +483,7 @@ class SFAClient():
         presentations = SFAPresentation.getAll()  # @UndefinedVariable
         for p in presentations:
             self._vd_to_lun[p.VirtualDiskIndex] = p.LUN
+        self.logger.debug( "Mapped %d virtual disks to LUNs"%len(self._vd_to_lun))
             
     
     def _verify_fw_version(self):

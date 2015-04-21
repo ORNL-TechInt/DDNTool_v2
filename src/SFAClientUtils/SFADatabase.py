@@ -127,13 +127,18 @@ class SFADatabase(object):
         client and virtual disk.
         '''
 
-        replace_query = "REPLACE INTO " + TABLE_NAMES['LUN_TABLE_NAME'] + \
-                "(Hostname, Disk_Num, Transfer_Bytes, Transfer_BW, " \
-                "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) " \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s);"
+        
+        insert_query = "INSERT INTO " + TABLE_NAMES['LUN_TABLE_NAME'] +                 \
+                "(Hostname, Disk_Num, Transfer_Bytes, Transfer_BW, "                    \
+                "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) "     \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s) "                          \
+                "ON DUPLICATE KEY UPDATE Transfer_Bytes=VALUES(Transfer_Bytes), "       \
+                "Transfer_BW=VALUES(Transfer_BW), Read_IOPS=VALUES(Read_IOPS), "        \
+                "Write_IOPS=VALUES(Write_IOPS), Forwarded_BW=VALUES(Forwarded_BW), "    \
+                "Forwarded_IOPS=VALUES(Forwarded_IOPS), Pool_State=VALUES(Pool_State);" 
         
         cursor = self._dbcon.cursor()
-        cursor.execute( replace_query, (sfa_client_name, str(lun_num),
+        cursor.execute( insert_query, (sfa_client_name, str(lun_num),
                                         str(transfer_bytes), str(transfer_bw),
                                         str(read_iops), str(write_iops),
                                         str(forwarded_bw), str(forwarded_iops),

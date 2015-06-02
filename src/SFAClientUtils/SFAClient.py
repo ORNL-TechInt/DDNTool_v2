@@ -266,11 +266,11 @@ class SFAClient():
 
         for lun_num in self._vd_to_lun.values():
             try:
-                read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 10)
-                write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 10)
-                bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 10)
-                fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 10)
-                fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 10)
+                read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 60)
+                write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 60)
+                bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
+                fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
+                fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
                 
                 # Grab the raw kbytes_transferred value out of the saved stats object
                 tmp_stats = self._vd_stats[lun_num]
@@ -296,9 +296,9 @@ class SFAClient():
 # It turns out that we don't care about the per-disk iops & bandwidth
 #        for dd_num in self._dd_stats.keys():
 #            try:
-#                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 10)
-#                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 10)
-#                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 10)
+#                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
+#                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
+#                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
 #                self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
 #                                   read_iops[0], write_iops[0])
 #            except EmptyTimeSeriesException:

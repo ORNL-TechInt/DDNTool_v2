@@ -4,6 +4,7 @@ Created on May 3, 2013
 @author: xmr
 '''
 
+import logging
 import mysql.connector
 
 
@@ -112,6 +113,10 @@ class SFADatabase(object):
         from any errors and without a database connection and properly initialized
         tables, this class is pretty useless.
         '''
+
+        # Get the logger object
+        self.logger = logging.getLogger( 'DDNTool_SFADatabase')
+        self.logger.debug( 'Creating instance of SFADatabase')
 
         self._dbcon = mysql.connector.connect(user = user, password = password,
                                               host = host, database = db_name)

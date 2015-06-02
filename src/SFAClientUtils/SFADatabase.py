@@ -137,7 +137,8 @@ class SFADatabase(object):
                 "(Hostname, Disk_Num, Transfer_Bytes, Transfer_BW, "                    \
                 "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) "     \
                 "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s) "                          \
-                "ON DUPLICATE KEY UPDATE Transfer_Bytes=VALUES(Transfer_Bytes), "       \
+                "ON DUPLICATE KEY UPDATE LastUpdate=NOW(), "                            \
+                "Transfer_Bytes=VALUES(Transfer_Bytes), "                               \
                 "Transfer_BW=VALUES(Transfer_BW), Read_IOPS=VALUES(Read_IOPS), "        \
                 "Write_IOPS=VALUES(Write_IOPS), Forwarded_BW=VALUES(Forwarded_BW), "    \
                 "Forwarded_IOPS=VALUES(Forwarded_IOPS), Pool_State=VALUES(Pool_State);" 

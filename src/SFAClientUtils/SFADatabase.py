@@ -183,7 +183,7 @@ class SFADatabase(object):
 
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
         
-        for i in range(len(size_buckets)):
+        for unused_i in range(len(size_buckets)):
             replace_query += ", %s"
         replace_query += ");"
        
@@ -213,7 +213,7 @@ class SFADatabase(object):
 
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
 
-        for i in range(len(latency_buckets)):
+        for unused_i in range(len(latency_buckets)):
             replace_query += ", %s"
         replace_query += ");"
 
@@ -244,7 +244,7 @@ class SFADatabase(object):
             
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
         
-        for i in range(len(size_buckets)):
+        for unused_i in range(len(size_buckets)):
             replace_query += ", %s"
         replace_query += ");"
         
@@ -274,7 +274,7 @@ class SFADatabase(object):
             
         replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
         
-        for i in range(len(latency_buckets)):
+        for unused_i in range(len(latency_buckets)):
             replace_query += ", %s"
         replace_query += ");"
         

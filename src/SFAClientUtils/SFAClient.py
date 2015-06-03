@@ -15,8 +15,8 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
 
-MINIMUM_FW_VER = '2.3.1' 
-# 2.3.1 is needed for the read & write bandwidth numbers
+MINIMUM_FW_VER = '2.3.0' 
+# 2.3.0 is needed for the read & write bandwidth numbers
 
 class UnexpectedClientDataException( Exception):
     '''
@@ -196,6 +196,14 @@ class SFAClient():
             self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]].append(
                     (stats.KBytesTransferred[0] + stats.KBytesTransferred[1]) * 1024)
             # Note: converted to bytes
+            
+            self._time_series['lun_read_bytes'][self._vd_to_lun[index]].append(
+                    (stats.KBytesRead[0] + stats.KBytesRead[1]) * 1024)
+            # Note: converted to bytes
+            
+            self._time_series['lun_write_bytes'][self._vd_to_lun[index]].append(
+                    (stats.KBytesWritten[0] + stats.KBytesWritten[1]) * 1024)
+            # Note: converted to bytes
 
             self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]].append(
                     (stats.KBytesForwarded[0] + stats.KBytesForwarded[1]) * 1024)
@@ -266,7 +274,9 @@ class SFAClient():
             try:
                 read_iops = self._get_time_series_average( 'lun_read_iops', lun_num, 60)
                 write_iops = self._get_time_series_average( 'lun_write_iops', lun_num, 60)
-                bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
+                transfer_bandwidth = self._get_time_series_average( 'lun_transfer_bytes', lun_num, 60)
+                read_bandwidth = self._get_time_series_average( 'lun_read_bytes', lun_num, 60)
+                write_bandwidth = self._get_time_series_average( 'lun_write_bytes', lun_num, 60)
                 fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
                 fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
                 
@@ -280,8 +290,10 @@ class SFAClient():
                     pool_state = 255
                 
                 self._db.update_lun_table(self._get_host_name(), lun_num,
-                                   bandwidth[0], read_iops[0], write_iops[0], fw_bandwidth[0],
-                                   fw_iops[0], pool_state)
+                                   transfer_bandwidth[0],
+                                   read_bandwidth[0], write_bandwidth[0],
+                                   read_iops[0], write_iops[0],
+                                   fw_bandwidth[0], fw_iops[0], pool_state)
             
             except EmptyTimeSeriesException:
                 print "Skipping empty time series for host %s, virtual disk %d"% \
@@ -400,6 +412,8 @@ class SFAClient():
         self._time_series['lun_read_iops'] = { }
         self._time_series['lun_write_iops'] = { }
         self._time_series['lun_transfer_bytes'] = { }
+        self._time_series['lun_read_bytes'] = { }
+        self._time_series['lun_write_bytes'] = { }
         self._time_series['lun_forwarded_bytes'] = { }
         self._time_series['lun_forwarded_iops'] = { }
         for stats in vd_stats:
@@ -412,6 +426,8 @@ class SFAClient():
             self._time_series['lun_read_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300) 
             self._time_series['lun_write_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
             self._time_series['lun_transfer_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
+            self._time_series['lun_read_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
+            self._time_series['lun_write_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
             self._time_series['lun_forwarded_bytes'][self._vd_to_lun[index]] = SFATimeSeries( 300)
             self._time_series['lun_forwarded_iops'][self._vd_to_lun[index]] = SFATimeSeries( 300)
 
@@ -514,7 +530,7 @@ class SFAClient():
         fw_nums = fw_version.split('.')
         min_nums = MINIMUM_FW_VER.split('.')
         version_too_low = False
-        for i in range(len(fw_nums)):
+        for i in range(min(len(fw_nums), len(min_nums))):
             if int(fw_nums[i]) > int(min_nums[i]):
                 break   # firmware is new enough
             if int(fw_nums[i]) == int(min_nums[i]):

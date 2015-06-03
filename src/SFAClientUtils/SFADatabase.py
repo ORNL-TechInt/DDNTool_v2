@@ -125,7 +125,8 @@ class SFADatabase(object):
             self._create_schema()
         
  
-    def update_lun_table( self, sfa_client_name, lun_num, transfer_bw,
+    def update_lun_table( self, sfa_client_name, lun_num,
+                          transfer_bw, read_bw, write_bw,
                           read_iops, write_iops, forwarded_bw, forwarded_iops,
                           pool_state):
         '''
@@ -135,17 +136,19 @@ class SFADatabase(object):
 
         
         insert_query = "INSERT INTO " + TABLE_NAMES['LUN_TABLE_NAME'] +                 \
-                "(Hostname, Disk_Num, Transfer_BW, "                                    \
+                "(Hostname, Disk_Num, Transfer_BW, Read_BW, Write_BW, "                 \
                 "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) "     \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s) "                              \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "                      \
                 "ON DUPLICATE KEY UPDATE LastUpdate=NOW(), "                            \
-                "Transfer_BW=VALUES(Transfer_BW), Read_IOPS=VALUES(Read_IOPS), "        \
+                "Transfer_BW=VALUES(Transfer_BW), Read_BW=VALUES(Read_BW), "            \
+                "Write_BW=VALUES(Write_BW), Read_IOPS=VALUES(Read_IOPS), "              \
                 "Write_IOPS=VALUES(Write_IOPS), Forwarded_BW=VALUES(Forwarded_BW), "    \
                 "Forwarded_IOPS=VALUES(Forwarded_IOPS), Pool_State=VALUES(Pool_State);" 
         
         cursor = self._dbcon.cursor()
         cursor.execute( insert_query, (sfa_client_name, str(lun_num),
                                         str(transfer_bw),
+                                        str(read_bw), str(write_bw),
                                         str(read_iops), str(write_iops),
                                         str(forwarded_bw), str(forwarded_iops),
                                         str(pool_state)))
@@ -374,7 +377,8 @@ class SFADatabase(object):
         "CREATE TABLE " + TABLE_NAMES["LUN_TABLE_NAME"] + " "  \
         "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
         "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
-        "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
+        "Transfer_BW FLOAT, Read_BW FLOAT, Write_BW FLOAT, " \
+        "READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
         "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
         "Pool_State INT, " \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \

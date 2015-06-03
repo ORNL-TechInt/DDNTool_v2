@@ -15,6 +15,7 @@ TABLE_NAMES = {
 #             "MAIN_TABLE_NAME" : u"Main",
              "DISK_TABLE_NAME" : u"Disk",
              "LUN_TABLE_NAME" : u"LunInfo",
+             "RAW_LUN_TABLE_NAME" : u"LunInfoRaw",
              "TIER_DELAY_TABLE_NAME" : u"TierDelays",
              "LUN_READ_REQUEST_SIZE_TABLE_NAME" : u"LunReadRequestSizes",
              "LUN_READ_REQUEST_LATENCY_TABLE_NAME" : u"LunReadRequestLatencies",
@@ -124,9 +125,9 @@ class SFADatabase(object):
             self._create_schema()
         
  
-    def update_lun_table( self, sfa_client_name, lun_num, transfer_bytes,
-                          transfer_bw, read_iops, write_iops, forwarded_bw,
-                          forwarded_iops, pool_state):
+    def update_lun_table( self, sfa_client_name, lun_num, transfer_bw,
+                          read_iops, write_iops, forwarded_bw, forwarded_iops,
+                          pool_state):
         '''
         Updates the row in the lun info table for the specified 
         client and virtual disk.
@@ -134,23 +135,56 @@ class SFADatabase(object):
 
         
         insert_query = "INSERT INTO " + TABLE_NAMES['LUN_TABLE_NAME'] +                 \
-                "(Hostname, Disk_Num, Transfer_Bytes, Transfer_BW, "                    \
+                "(Hostname, Disk_Num, Transfer_BW, "                                    \
                 "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) "     \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s) "                          \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s) "                              \
                 "ON DUPLICATE KEY UPDATE LastUpdate=NOW(), "                            \
-                "Transfer_Bytes=VALUES(Transfer_Bytes), "                               \
                 "Transfer_BW=VALUES(Transfer_BW), Read_IOPS=VALUES(Read_IOPS), "        \
                 "Write_IOPS=VALUES(Write_IOPS), Forwarded_BW=VALUES(Forwarded_BW), "    \
                 "Forwarded_IOPS=VALUES(Forwarded_IOPS), Pool_State=VALUES(Pool_State);" 
         
         cursor = self._dbcon.cursor()
         cursor.execute( insert_query, (sfa_client_name, str(lun_num),
-                                        str(transfer_bytes), str(transfer_bw),
+                                        str(transfer_bw),
                                         str(read_iops), str(write_iops),
                                         str(forwarded_bw), str(forwarded_iops),
                                         str(pool_state)))
         cursor.close()
 
+    def update_raw_lun_table( self, sfa_client_name, lun_num, transfer_bytes,
+                              read_bytes, write_bytes, forwarded_bytes,
+                              total_ios, read_ios, write_ios, forwarded_ios,
+                              pool_state):
+        '''
+        Updates the row in the raw lun info table for the specified 
+        client and virtual disk.
+        '''
+        
+        insert_query = "INSERT INTO " + TABLE_NAMES['RAW_LUN_TABLE_NAME'] +   \
+                "(Hostname, Disk_Num, Transfer_Bytes, "                       \
+                "Read_Bytes, Write_Bytes, Forwarded_bytes, "                  \
+                "Total_IOs, Read_IOs, Write_IOs, Forwarded_IOs, Pool_State) " \
+                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "        \
+                "ON DUPLICATE KEY UPDATE LastUpdate=NOW(), "                  \
+                "Transfer_Bytes=VALUES(Transfer_Bytes), "                     \
+                "Read_Bytes=VALUES(Read_Bytes), "                             \
+                "Write_Bytes=VALUES(Write_Bytes), "                           \
+                "Forwarded_Bytes=VALUES(Forwarded_Bytes), "                   \
+                "Total_IOs=VALUES(Total_IOs), Read_IOs=VALUES(Read_IOs), "    \
+                "Write_IOs=VALUES(Write_IOs), "                               \
+                "Forwarded_IOs=VALUES(Forwarded_IOs), "                       \
+                "Pool_State=VALUES(Pool_State);" 
+        
+        cursor = self._dbcon.cursor()
+        cursor.execute( insert_query, (sfa_client_name, str(lun_num),
+                                        str(transfer_bytes),
+                                        str(read_bytes), str(write_bytes),
+                                        str(forwarded_bytes),
+                                        str(total_ios), str(read_ios),
+                                        str(write_ios), str(forwarded_ios),
+                                        str(pool_state)))
+        cursor.close()
+        
     def update_dd_table( self, sfa_client_name, dd_num, transfer_bw,
             read_iops, write_iops):
         '''
@@ -310,6 +344,7 @@ class SFADatabase(object):
         
         # create the new table(s)
         self._new_lun_table()
+        self._new_raw_lun_table()
         self._new_dd_table()
         self._new_dd_read_request_size_table()
         self._new_dd_read_request_latency_table()
@@ -332,16 +367,38 @@ class SFADatabase(object):
 
     def _new_lun_table(self):
         '''
-        Create the db table that holds statistics on all the luns
+        Create the db table that holds processed statistics on all the luns
         '''
 
         table_def = \
         "CREATE TABLE " + TABLE_NAMES["LUN_TABLE_NAME"] + " "  \
         "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
         "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
-        "Transfer_Bytes BIGINT UNSIGNED, " \
         "Transfer_BW FLOAT, READ_IOPS FLOAT, WRITE_IOPS FLOAT, "  \
         "Forwarded_BW FLOAT, FORWARDED_IOPS FLOAT, " \
+        "Pool_State INT, " \
+        "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+        "INDEX( Hostname), INDEX( Disk_Num) )"  \
+        "ENGINE=HEAP" \
+        ";"
+
+        self._query_exec( table_def)
+        
+    def _new_raw_lun_table(self):
+        '''
+        Create the db table that holds raw statistics on all the luns
+        '''
+
+        table_def = \
+        "CREATE TABLE " + TABLE_NAMES["RAW_LUN_TABLE_NAME"] + " "  \
+        "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+        "Disk_Num SMALLINT UNSIGNED NOT NULL, "  \
+        "Transfer_Bytes BIGINT UNSIGNED, " \
+        "Read_Bytes BIGINT UNSIGNED, Write_Bytes BIGINT UNSIGNED, " \
+        "Forwarded_Bytes BIGINT UNSIGNED, " \
+        "Total_IOs BIGINT UNSIGNED, "  \
+        "Read_IOs BIGINT UNSIGNED, Write_IOs BIGINT UNSIGNED, "  \
+        "Forwarded_IOs BIGINT UNSIGNED, "  \
         "Pool_State INT, " \
         "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
         "INDEX( Hostname), INDEX( Disk_Num) )"  \

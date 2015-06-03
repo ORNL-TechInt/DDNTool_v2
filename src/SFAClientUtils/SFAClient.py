@@ -15,10 +15,8 @@ from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
 
-MINIMUM_FW_VER = '1.5.3.1'
-#MINIMUM_FW_VER = '2.0.0.3'
-# Switch the minimum to 2.0.0.3 once we start using the
-# statistics filtering classes
+MINIMUM_FW_VER = '2.3.1' 
+# 2.3.1 is needed for the read & write bandwidth numbers
 
 class UnexpectedClientDataException( Exception):
     '''
@@ -272,10 +270,6 @@ class SFAClient():
                 fw_bandwidth = self._get_time_series_average( 'lun_forwarded_bytes', lun_num, 60)
                 fw_iops = self._get_time_series_average( 'lun_forwarded_iops', lun_num, 60)
                 
-                # Grab the raw kbytes_transferred value out of the saved stats object
-                tmp_stats = self._vd_stats[lun_num]
-                bytes_transferred = (tmp_stats.KBytesTransferred[0] + tmp_stats.KBytesTransferred[1]) * 1024
-                
                 # Get the pool state we copied out of the associated SFAStoragePool object
                 # Note: this object is only updated at the medium rate
                 try:
@@ -285,12 +279,35 @@ class SFAClient():
                     self.logger.error( "Setting pool state to UNKNOWN!")
                     pool_state = 255
                 
-                self._db.update_lun_table(self._get_host_name(), lun_num, bytes_transferred,
+                self._db.update_lun_table(self._get_host_name(), lun_num,
                                    bandwidth[0], read_iops[0], write_iops[0], fw_bandwidth[0],
                                    fw_iops[0], pool_state)
+            
             except EmptyTimeSeriesException:
                 print "Skipping empty time series for host %s, virtual disk %d"% \
                         (self._get_host_name(), lun_num)
+                   
+            # Work on the values for the raw lun table (grab the raw
+            # values out of the saved stats object)
+            tmp_stats = self._vd_stats[lun_num]
+            
+            read_bytes = (tmp_stats.KBytesRead[0] + tmp_stats.KBytesRead[1]) * 1024
+            write_bytes = (tmp_stats.KBytesWritten[0] + tmp_stats.KBytesWritten[1]) * 1024
+            transfer_bytes = (tmp_stats.KBytesTransferred[0] + tmp_stats.KBytesTransferred[1]) * 1024
+            forwarded_bytes = (tmp_stats.KBytesForwarded[0] + tmp_stats.KBytesForwarded[1]) * 1024
+            # Note: converted to bytes
+            
+            total_ios = (tmp_stats.TotalIOs[0] + tmp_stats.TotalIOs[1])
+            forwarded_ios = (tmp_stats.ForwardedIOs[0] + tmp_stats.ForwardedIOs[1])
+            read_ios = (tmp_stats.ReadIOs[0] + tmp_stats.ReadIOs[1])
+            write_ios = (tmp_stats.WriteIOs[0] + tmp_stats.WriteIOs[1])
+            
+            self._db.update_raw_lun_table( self._get_host_name(), lun_num, transfer_bytes,
+                          read_bytes, write_bytes, forwarded_bytes,
+                          total_ios, read_ios, write_ios, forwarded_ios,
+                          pool_state)
+                
+
 
 
 # It turns out that we don't care about the per-disk iops & bandwidth

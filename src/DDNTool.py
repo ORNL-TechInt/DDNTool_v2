@@ -12,7 +12,6 @@ import ConfigParser
 import argparse
 import multiprocessing
 import logging
-import logging.handlers
 import time
 
 from SFAClientUtils import SFAClient, SFADatabase

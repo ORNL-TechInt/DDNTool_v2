@@ -125,7 +125,7 @@ class SFADatabase(object):
             self._create_schema()
         
  
-    def update_lun_table( self, sfa_client_name, lun_num,
+    def update_lun_table( self, sfa_client_name, update_time, lun_num,
                           transfer_bw, read_bw, write_bw,
                           read_iops, write_iops, forwarded_bw, forwarded_iops,
                           pool_state):
@@ -136,39 +136,40 @@ class SFADatabase(object):
 
         
         insert_query = "INSERT INTO " + TABLE_NAMES['LUN_TABLE_NAME'] +                 \
-                "(Hostname, Disk_Num, Transfer_BW, Read_BW, Write_BW, "                 \
+                "(Hostname, LastUpdate, Disk_Num, Transfer_BW, Read_BW, Write_BW, "     \
                 "Read_IOPS, Write_IOPS, Forwarded_BW, Forwarded_IOPS, Pool_State) "     \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "                      \
-                "ON DUPLICATE KEY UPDATE LastUpdate=NOW(), "                            \
+                "VALUES( %s, FROM_UNIXTIME(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s) "   \
+                "ON DUPLICATE KEY UPDATE LastUpdate=VALUES(LastUpdate), "               \
                 "Transfer_BW=VALUES(Transfer_BW), Read_BW=VALUES(Read_BW), "            \
                 "Write_BW=VALUES(Write_BW), Read_IOPS=VALUES(Read_IOPS), "              \
                 "Write_IOPS=VALUES(Write_IOPS), Forwarded_BW=VALUES(Forwarded_BW), "    \
                 "Forwarded_IOPS=VALUES(Forwarded_IOPS), Pool_State=VALUES(Pool_State);" 
         
         cursor = self._dbcon.cursor()
-        cursor.execute( insert_query, (sfa_client_name, str(lun_num),
-                                        str(transfer_bw),
-                                        str(read_bw), str(write_bw),
-                                        str(read_iops), str(write_iops),
-                                        str(forwarded_bw), str(forwarded_iops),
-                                        str(pool_state)))
+        cursor.execute( insert_query, (sfa_client_name, str(update_time),
+                                       str(lun_num), str(transfer_bw),
+                                       str(read_bw), str(write_bw),
+                                       str(read_iops), str(write_iops),
+                                       str(forwarded_bw), str(forwarded_iops),
+                                       str(pool_state)))
         cursor.close()
 
-    def update_raw_lun_table( self, sfa_client_name, lun_num, transfer_bytes,
-                              read_bytes, write_bytes, forwarded_bytes,
-                              total_ios, read_ios, write_ios, forwarded_ios,
-                              pool_state):
+    def update_raw_lun_table( self, sfa_client_name, update_time, lun_num,
+                              transfer_bytes, read_bytes, write_bytes,
+                              forwarded_bytes, total_ios, read_ios, write_ios,
+                              forwarded_ios, pool_state):
         '''
         Updates the row in the raw lun info table for the specified 
         client and virtual disk.
         '''
         
         insert_query = "INSERT INTO " + TABLE_NAMES['RAW_LUN_TABLE_NAME'] +   \
-                "(Hostname, Disk_Num, Transfer_Bytes, "                       \
+                "(Hostname, LastUpdate, Disk_Num, Transfer_Bytes, "           \
                 "Read_Bytes, Write_Bytes, Forwarded_bytes, "                  \
                 "Total_IOs, Read_IOs, Write_IOs, Forwarded_IOs, Pool_State) " \
-                "VALUES( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "        \
-                "ON DUPLICATE KEY UPDATE LastUpdate=NOW(), "                  \
+                "VALUES( %s, FROM_UNIXTIME(%s), %s, %s, %s, %s, %s, %s, %s, " \
+                "%s, %s, %s) "                                                \
+                "ON DUPLICATE KEY UPDATE LastUpdate=VALUES(LastUpdate), "     \
                 "Transfer_Bytes=VALUES(Transfer_Bytes), "                     \
                 "Read_Bytes=VALUES(Read_Bytes), "                             \
                 "Write_Bytes=VALUES(Write_Bytes), "                           \
@@ -179,8 +180,8 @@ class SFADatabase(object):
                 "Pool_State=VALUES(Pool_State);" 
         
         cursor = self._dbcon.cursor()
-        cursor.execute( insert_query, (sfa_client_name, str(lun_num),
-                                        str(transfer_bytes),
+        cursor.execute( insert_query, (sfa_client_name, str(update_time),
+                                        str(lun_num), str(transfer_bytes),
                                         str(read_bytes), str(write_bytes),
                                         str(forwarded_bytes),
                                         str(total_ios), str(read_ios),
@@ -188,23 +189,26 @@ class SFADatabase(object):
                                         str(pool_state)))
         cursor.close()
         
-    def update_dd_table( self, sfa_client_name, dd_num, transfer_bw,
-            read_iops, write_iops):
+    def update_dd_table( self, sfa_client_name, update_time, dd_num,
+                         transfer_bw, read_iops, write_iops):
         '''
         Updates the row in the disk table for the specified 
         client and virtual disk.
         '''
 
         replace_query = "REPLACE INTO " + TABLE_NAMES['DISK_TABLE_NAME'] + \
-                        "(Hostname, Disk_Num, Transfer_BW, Read_IOPS, Write_IOPS) " \
-                        "VALUES( %s, %s, %s, %s, %s);"
+                        "(Hostname, LastUpdate, Disk_Num, Transfer_BW, "   \
+                        "Read_IOPS, Write_IOPS) "                          \
+                        "VALUES( %s, FROM_UNIXTIME(%s), %s, %s, %s, %s);"
      
         cursor = self._dbcon.cursor()
-        cursor.execute( replace_query, (sfa_client_name, str(dd_num), str(transfer_bw),
+        cursor.execute( replace_query, (sfa_client_name, str(update_time),
+                                        str(dd_num), str(transfer_bw),
                                         str(read_iops), str(write_iops)))
         cursor.close()
 
-    def update_lun_request_size_table( self, sfa_client_name, lun_num, read_table, size_buckets):
+    def update_lun_request_size_table( self, sfa_client_name, update_time,
+                                       lun_num, read_table, size_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
         boolean) for one LUN on one client.  size_buckets is a list containing the
@@ -218,13 +222,13 @@ class SFADatabase(object):
         else:    
             replace_query += TABLE_NAMES["LUN_WRITE_REQUEST_SIZE_TABLE_NAME"]
 
-        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s" 
+        replace_query += " VALUES( %s, FROM_UNIXTIME(%s), %s" 
         
         for unused_i in range(len(size_buckets)):
             replace_query += ", %s"
         replace_query += ");"
        
-        values = (sfa_client_name, str(lun_num))
+        values = (sfa_client_name, str(update_time), str(lun_num))
         for size in size_buckets:
                 values += (str(size), )
         # Note: it seems like I shouldn't have to convert all the sizes to strings manually,
@@ -234,7 +238,8 @@ class SFADatabase(object):
         cursor.execute( replace_query, values)
         cursor.close()
 
-    def update_lun_request_latency_table( self, sfa_client_name, lun_num, read_table, latency_buckets):
+    def update_lun_request_latency_table( self, sfa_client_name, update_time,
+                                          lun_num, read_table, latency_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
         boolean) for one lun on one client.  latency_buckets is a list containing
@@ -248,13 +253,13 @@ class SFADatabase(object):
         else:
             replace_query += TABLE_NAMES["LUN_WRITE_REQUEST_LATENCY_TABLE_NAME"]
 
-        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+        replace_query += " VALUES( %s, FROM_UNIXTIME(%s), %s"
 
         for unused_i in range(len(latency_buckets)):
             replace_query += ", %s"
         replace_query += ");"
 
-        values = (sfa_client_name, str(lun_num))
+        values = (sfa_client_name, str(update_time), str(lun_num))
         for latency in latency_buckets:
                 values += (str(latency), )
         # Note: it seems like I shouldn't have to convert all the values to strings manually,
@@ -265,7 +270,8 @@ class SFADatabase(object):
         cursor.close()
 
  
-    def update_dd_request_size_table( self, sfa_client_name, disk_num, read_table, size_buckets):
+    def update_dd_request_size_table( self, sfa_client_name, update_time,
+                                      disk_num, read_table, size_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
         boolean) for one disk drive on one client.  size_buckets is a list containing the
@@ -279,13 +285,13 @@ class SFADatabase(object):
         else:    
             replace_query += TABLE_NAMES["DD_WRITE_REQUEST_SIZE_TABLE_NAME"]
             
-        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+        replace_query += " VALUES( %s, FROM_UNIXTIME(%s), %s"
         
         for unused_i in range(len(size_buckets)):
             replace_query += ", %s"
         replace_query += ");"
         
-        values = (sfa_client_name, str(disk_num))
+        values = (sfa_client_name, str(update_time), str(disk_num))
         for size in size_buckets:
                 values += (str(size), )
         # Note: it seems like I shouldn't have to convert all the sizes to strings manually,
@@ -295,7 +301,8 @@ class SFADatabase(object):
         cursor.execute( replace_query, values)
         cursor.close()
         
-    def update_dd_request_latency_table( self, sfa_client_name, disk_num, read_table, latency_buckets):
+    def update_dd_request_latency_table( self, sfa_client_name, update_time,
+                                         disk_num, read_table, latency_buckets):
         '''
         Update the read or write request size data (depending on the value of the read_table
         boolean) for one disk drive on one client.  latency_buckets is a list containing
@@ -309,13 +316,13 @@ class SFADatabase(object):
         else:
             replace_query += TABLE_NAMES["DD_WRITE_REQUEST_LATENCY_TABLE_NAME"]
             
-        replace_query += " VALUES( %s, CURRENT_TIMESTAMP(), %s"
+        replace_query += " VALUES( %s, FROM_UNIXTIME(%s), %s"
         
         for unused_i in range(len(latency_buckets)):
             replace_query += ", %s"
         replace_query += ");"
         
-        values = (sfa_client_name, str(disk_num))
+        values = (sfa_client_name, str(update_time), str(disk_num))
         for latency in latency_buckets:
                 values += (str(latency), )
         # Note: it seems like I shouldn't have to convert all the values to strings manually,

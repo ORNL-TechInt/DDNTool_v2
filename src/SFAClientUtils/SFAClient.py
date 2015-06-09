@@ -4,7 +4,6 @@ Created on Mar 22, 2013
 @author: xmr
 '''
 
-import time
 import ConfigParser
 
 import logging
@@ -37,7 +36,7 @@ class SFAClient():
     only "public" function it has is run().
     '''
 
-    def __init__(self, address, conf_file):
+    def __init__(self, address, conf_file, event, update_time):
         '''
         Constructor
         '''
@@ -104,12 +103,21 @@ class SFAClient():
         self.logger.debug( '_time_series_init() completed.  Calling _check_labels()')
         self._check_labels()    # verify the labels for the request sizes and latencies
                                 # match what we've hard-coded into the database
+                                
+        # Save the event and update time object
+        # event is a multiprocessing.Event object and update_time is a
+        # multiprocessing.Value object
+        self._event = event
+        self._update_time = update_time
+        
         self.logger.debug( '__init__ completed')
         
         
     def run(self):
         '''
-        Main loop: polls the SFA, post-processes the data, publish it to the database.  Runs forever.
+        Main loop: Waits on the event, then polls the SFA, post-processes the
+        data, publishes it to the database.  Then it clears the event.  Runs
+        until the main processes sends an update time of 0.
         '''
         
         # make sure the firmware is new enough to have the features we need
@@ -128,18 +136,23 @@ class SFAClient():
         # get any EmptyTimeSeries exceptions.
         self._fast_poll_tasks()
 
-        next_fast_poll_time = 0
         fast_iteration = -1 # This is initialized to -1 in order to force us to execute
                             # the medium and slow poll stuff the first time we pass
                             # through the while loop.
         
         while not self._exit_requested:  # loop until we're told not to
             
-            while (time.time() < next_fast_poll_time):
-                time.sleep(self._fast_poll_interval / 10) # wait for the poll time to come up
-            
-            next_fast_poll_time = time.time() + self._fast_poll_interval
+            self.logger.debug( "Waiting on event")
+            self._event.wait()  # wait until we're told to poll
+            self.logger.debug( "Waking up")
+                      
             fast_iteration += 1
+            
+            # Check if we're supposed to exit
+            if self._update_time.value == 0:
+                self._exit_requested = True
+                break
+                
             
             ############# Fast Interval Stuff #######################
             self._fast_poll_tasks()           
@@ -169,6 +182,8 @@ class SFAClient():
                 self.logger.debug( 'Executing slow rate DB tasks')
                 self._slow_database_tasks()
                         
+            self._event.clear();    # Clear the event to signal that we're done
+                                    # processing this iteration
         # end of main while loop
     # end of run() 
 
@@ -289,11 +304,11 @@ class SFAClient():
                     self.logger.error( "Setting pool state to UNKNOWN!")
                     pool_state = 255
                 
-                self._db.update_lun_table(self._get_host_name(), lun_num,
-                                   transfer_bandwidth[0],
-                                   read_bandwidth[0], write_bandwidth[0],
-                                   read_iops[0], write_iops[0],
-                                   fw_bandwidth[0], fw_iops[0], pool_state)
+                self._db.update_lun_table(self._get_host_name(), self._update_time.value, 
+                                          lun_num, transfer_bandwidth[0],
+                                          read_bandwidth[0], write_bandwidth[0],
+                                          read_iops[0], write_iops[0],
+                                          fw_bandwidth[0], fw_iops[0], pool_state)
             
             except EmptyTimeSeriesException:
                 print "Skipping empty time series for host %s, virtual disk %d"% \
@@ -314,10 +329,10 @@ class SFAClient():
             read_ios = (tmp_stats.ReadIOs[0] + tmp_stats.ReadIOs[1])
             write_ios = (tmp_stats.WriteIOs[0] + tmp_stats.WriteIOs[1])
             
-            self._db.update_raw_lun_table( self._get_host_name(), lun_num, transfer_bytes,
-                          read_bytes, write_bytes, forwarded_bytes,
-                          total_ios, read_ios, write_ios, forwarded_ios,
-                          pool_state)
+            self._db.update_raw_lun_table( self._get_host_name(), self._update_time.value,
+                          lun_num, transfer_bytes,read_bytes, write_bytes,
+                          forwarded_bytes, total_ios, read_ios, write_ios,
+                          forwarded_ios, pool_state)
                 
 
 
@@ -328,7 +343,8 @@ class SFAClient():
 #                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
 #                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
 #                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
-#                self._db.update_dd_table(self._get_host_name(), dd_num, bandwidth[0],
+#                self._db.update_dd_table(self._get_host_name(), self._update_time.value,
+#                                   dd_num, bandwidth[0],
 #                                   read_iops[0], write_iops[0])
 #            except EmptyTimeSeriesException:
 #                print "Skipping empty time series for host %s, disk drive %d"% \
@@ -341,23 +357,31 @@ class SFAClient():
         '''
         for lun_num in self._vd_to_lun.values():
             request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
-            self._db.update_lun_request_size_table( self._get_host_name(), lun_num, True, request_values)
+            self._db.update_lun_request_size_table( self._get_host_name(),
+                    self._update_time.value, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
-            self._db.update_lun_request_size_table( self._get_host_name(), lun_num, False, request_values)
+            self._db.update_lun_request_size_table( self._get_host_name(),
+                    self._update_time.value, lun_num, False, request_values)
             request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
-            self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, True, request_values)
+            self._db.update_lun_request_latency_table( self._get_host_name(),
+                    self._update_time.value, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
-            self._db.update_lun_request_latency_table( self._get_host_name(), lun_num, False, request_values)
+            self._db.update_lun_request_latency_table( self._get_host_name(),
+                    self._update_time.value, lun_num, False, request_values)
 
         for dd_num in self._dd_stats.keys():
             request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
-            self._db.update_dd_request_size_table( self._get_host_name(), dd_num, True, request_values)
+            self._db.update_dd_request_size_table( self._get_host_name(),
+                    self._update_time.value, dd_num, True, request_values)
             request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
-            self._db.update_dd_request_size_table( self._get_host_name(), dd_num, False, request_values)
+            self._db.update_dd_request_size_table( self._get_host_name(),
+                    self._update_time.value, dd_num, False, request_values)
             request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
-            self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, True, request_values)
+            self._db.update_dd_request_latency_table( self._get_host_name(),
+                    self._update_time.value, dd_num, True, request_values)
             request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
-            self._db.update_dd_request_latency_table( self._get_host_name(), dd_num, False, request_values)
+            self._db.update_dd_request_latency_table( self._get_host_name(),
+                    self._update_time.value, dd_num, False, request_values)
 
         
     def _slow_database_tasks(self):

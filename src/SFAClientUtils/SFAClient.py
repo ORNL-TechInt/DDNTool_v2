@@ -5,14 +5,19 @@ Created on Mar 22, 2013
 '''
 
 import ConfigParser
-
 import logging
-
 import SFADatabase
 from SFATimeSeries import SFATimeSeries
 from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
+
+#
+# Note:  There are several code blocks that deal with the data from the 
+# SFADiskDriveStatistics class.  This code has all be commented out because
+# processing those objects is so slow.  I'm keeping the code around though
+# in case we change our minds about this.
+#
 
 MINIMUM_FW_VER = '2.3.0' 
 # 2.3.0 is needed for the read & write bandwidth numbers
@@ -75,7 +80,7 @@ class SFAClient():
         # Note: _vd_stats is indexed by the LUN number.  _dd_stats is
         # indexed by the disk drive number
         self._vd_stats = {}
-        self._dd_stats = {}
+#        self._dd_stats = {}
         
         # Storage pool state
         # We currently keep only one field from the SFAStoragePool classes: PoolState
@@ -369,19 +374,19 @@ class SFAClient():
             self._db.update_lun_request_latency_table( self._get_host_name(),
                     self._update_time.value, lun_num, False, request_values)
 
-        for dd_num in self._dd_stats.keys():
-            request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
-            self._db.update_dd_request_size_table( self._get_host_name(),
-                    self._update_time.value, dd_num, True, request_values)
-            request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
-            self._db.update_dd_request_size_table( self._get_host_name(),
-                    self._update_time.value, dd_num, False, request_values)
-            request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
-            self._db.update_dd_request_latency_table( self._get_host_name(),
-                    self._update_time.value, dd_num, True, request_values)
-            request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
-            self._db.update_dd_request_latency_table( self._get_host_name(),
-                    self._update_time.value, dd_num, False, request_values)
+#        for dd_num in self._dd_stats.keys():
+#            request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
+#            self._db.update_dd_request_size_table( self._get_host_name(),
+#                    self._update_time.value, dd_num, True, request_values)
+#            request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
+#            self._db.update_dd_request_size_table( self._get_host_name(),
+#                    self._update_time.value, dd_num, False, request_values)
+#            request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
+#            self._db.update_dd_request_latency_table( self._get_host_name(),
+#                    self._update_time.value, dd_num, True, request_values)
+#            request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
+#            self._db.update_dd_request_latency_table( self._get_host_name(),
+#                    self._update_time.value, dd_num, False, request_values)
 
         
     def _slow_database_tasks(self):
@@ -484,11 +489,11 @@ class SFAClient():
                 'Latency Counts <=512ms','Latency Counts <=1s', 'Latency Counts <=2s',
                 'Latency Counts <=4s', 'Latency Counts <=8s', 'Latency Counts <=16s',
                 'Latency Counts >16s']
-        expected_dd_latency_labels = ['Latency Counts <=4ms', 'Latency Counts <=8ms',
-                'Latency Counts <=16ms', 'Latency Counts <=32ms', 'Latency Counts <=64ms',
-                'Latency Counts <=128ms', 'Latency Counts <=256ms', 'Latency Counts <=512ms',
-                'Latency Counts <=1s', 'Latency Counts <=2s', 'Latency Counts <=4s',
-                'Latency Counts >4s']
+#        expected_dd_latency_labels = ['Latency Counts <=4ms', 'Latency Counts <=8ms',
+#                'Latency Counts <=16ms', 'Latency Counts <=32ms', 'Latency Counts <=64ms',
+#                'Latency Counts <=128ms', 'Latency Counts <=256ms', 'Latency Counts <=512ms',
+#                'Latency Counts <=1s', 'Latency Counts <=2s', 'Latency Counts <=4s',
+#                'Latency Counts >4s']
 
         vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
         for stats in vd_stats:
@@ -500,18 +505,18 @@ class SFAClient():
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
                                 (self._get_host_name(), stats.Index))
-        disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
-        # NOTE: getAll() is particularly slow for SFADiskDriveStatistics.  Might want to consider
-        # caching this value. (It's fetched up in _time_series_init())
-        for stats in disk_stats:
-            if stats.IOSizeIndexLabels != expected_size_labels:
-                raise UnexpectedClientDataException(
-                        "Unexpected IO size index labels for %s disk drive %d" % \
-                                (self._get_host_name(), stats.Index))
-            if stats.IOLatencyIndexLabels != expected_dd_latency_labels:
-                raise UnexpectedClientDataException(
-                        "Unexpected IO latency index labels for %s disk drive %d" % \
-                                (self._get_host_name(), stats.Index))
+#        disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
+#        # NOTE: getAll() is particularly slow for SFADiskDriveStatistics.  Might want to consider
+#        # caching this value. (It's fetched up in _time_series_init())
+#        for stats in disk_stats:
+#            if stats.IOSizeIndexLabels != expected_size_labels:
+#                raise UnexpectedClientDataException(
+#                        "Unexpected IO size index labels for %s disk drive %d" % \
+#                                (self._get_host_name(), stats.Index))
+#            if stats.IOLatencyIndexLabels != expected_dd_latency_labels:
+#                raise UnexpectedClientDataException(
+#                        "Unexpected IO latency index labels for %s disk drive %d" % \
+#                                (self._get_host_name(), stats.Index))
 
     
     def _get_host_name(self):

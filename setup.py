@@ -15,7 +15,7 @@ setup (
    author       = "Ross Miller",
    author_email = "rgmiller@ornl.gov",
    
-   version      = "2.2",
+   version      = "2.2.1",
    url          = "http://www.olcf.ornl.gov", # don't have a web page dedicated to the tool
 
    requires     = ["ddn.sfa.api (>= 2.3.0)"],

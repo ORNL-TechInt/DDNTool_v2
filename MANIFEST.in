@@ -1,0 +1,3 @@
+# This file exists to work around what I think is a bug in the python distutils that ship
+# with RHEL 6.  Once we no longer need to support RHEL6, we can (hopefully) remove this file.
+include src/init/DDNTool.conf src/ddntool.conf.sample

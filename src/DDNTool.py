@@ -271,17 +271,19 @@ def main_func():
     # (Prevents a race condition caused by the fact that each sub-process
     # clears its event at the bottom of its loop.)
     for p in sfa_processes:
-        if p.e.is_set():
+        if p.is_alive() and p.e.is_set():
             time.sleep( 0.01)  
     
     # Shut down all the sub-procs and exit
     update_time.value = 0   # Subprocs interpret a 0 update time as a
                             # shutdown command
     for p in sfa_processes:
-        p.e.set()
+        if p.is_alive():
+            p.e.set()
         
     for p in sfa_processes:
-        p.p.join()
+        if p.is_alive():
+            p.p.join()
 
     
     logger.info( "DDNTool exiting")

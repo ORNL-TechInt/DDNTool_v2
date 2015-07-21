@@ -13,6 +13,7 @@ import argparse
 import multiprocessing
 import logging
 import os
+import signal
 import time
 
 from SFAClientUtils import SFAClient, SFADatabase
@@ -112,6 +113,11 @@ def one_controller(host, conf_file, event, update_time):
     '''
     logger = logging.getLogger( "DDNTool")
     
+    # Sub processes will ignore SIGINT.  That way, when the user presses
+    # Ctrl-C, the signal will end up going to the main process (which will
+    # trap it and shut down cleanly).
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     try:
         client = SFAClient.SFAClient( host, conf_file, event, update_time)
         client.run()

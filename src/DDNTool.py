@@ -5,13 +5,14 @@ Created on Mar 22, 2013
 This will eventually become the new DDN monitoring tool. (For SFA hardware only.  The old DDNTool is still
 needed for the S2A hardware.)
 
-@author: xmr
+@author: Ross Miller
 '''
 
 import ConfigParser
 import argparse
 import multiprocessing
 import logging
+import os
 import time
 
 from SFAClientUtils import SFAClient, SFADatabase
@@ -28,16 +29,79 @@ from bracket_expand import bracket_expand, bracket_aware_split
 
 DEFAULT_CONF_FILE="./ddntool.conf"  # config file to use if not specified on the command line 
 
+logger = None  # logging object at global (module) scope so everyone can use it
+               # Initialized down in main_func()
 
 class ProcessData:
     '''
     Holds a few things we need to keep track of for each process: the process
     object itself and an Event that the process will wait on
     '''
-    def __init__(self, p, e):
-        self.p = p # process object
-        self.e = e # event object
-
+    def __init__(self, host, conf_file, update_time):
+        '''
+        Create an event and a process, then start the process.
+        
+        
+        host is a string with the hostname
+        conf_file is a string with the name of the config file
+        update_time is a shared memory value (Multiprocessing.Value) object
+        that the processes will use to get their update time values.
+        '''
+        
+        self.host=host
+        self.conf_file=conf_file
+        self.update_time=update_time
+        
+        self.restart()
+        
+    def restart( self):
+        '''Restart the process'''
+                
+        self.e = multiprocessing.Event()
+        self.e.clear()
+        
+        proc_name = 'DDNTool_' + self.host
+        logger.debug( "Creating process for host '%s'"%self.host)
+        self.p = multiprocessing.Process(name=proc_name,
+                                         target=one_controller,
+                                         args=(self.host, self.conf_file, 
+                                               self.e, self.update_time))
+        self.p.daemon = False
+        logger.info("Starting background process for %s", self.host)
+        print "Starting background process for", self.host
+        self.p.start()
+    
+    def is_alive(self):
+        '''
+        Check to see if the process is still alive
+        
+        The Process object has its own is_alive() function, but it doesn't
+        seem to work at all.  So, this function is based around the
+        os.waitpid() function.  It's called with the WNOHANG option, so it
+        will always return immediately.
+        
+        If the process is running normally, waitpid() returns (0, 0).
+        If the process happens to be a zombie,waitpid() cleans up the resources
+        and allows it to exit.  Then it returns something other than (0, 0).
+        If the process is completely gone, waitpid() throws an OSError.
+        '''
+        process_dead = False
+        try:
+            if os.waitpid( self.p.pid, os.WNOHANG) != (0, 0):
+                process_dead = True
+        except OSError:
+            process_dead = True
+            
+        if process_dead:
+            # Do some cleanup work: If the process has exited, then the event
+            # is going to be buggered as well.  Best thing to do is create a
+            # new one.  Even if we don't start a replacement process, at least
+            # calls to e.set() will continue to work.
+            self.e = multiprocessing.Event()
+            self.e.clear()
+            
+        return not process_dead
+    
        
 # event is a multiprocessing.Event object.
 # update_time is a multiprocessing.Value object
@@ -78,6 +142,12 @@ def main_loop( proc_list, wake_time, update_time):
             while (time.time() < last_wake + wake_time):
                 time.sleep( 0.01)  # 10 millisec sleep
         
+            # Make sure all the sub processes are still alive
+            for p in proc_list:
+                if not p.is_alive():
+                    logger.error( "Process %s has crashed!  Restarting!"%p.p.name)
+                    p.restart()
+                    
             # Wake up all the sub processes
             last_wake = time.time()
             update_time.value = int(last_wake)
@@ -89,24 +159,17 @@ def main_loop( proc_list, wake_time, update_time):
             # they will clear their events.  We wait for this so that we're
             # sure no subprocess is falling behind
             for p in proc_list:
-                while p.e.is_set():
+                while p.is_alive() and p.e.is_set():
                     time.sleep( 0.01)
             logger.debug( "All sub-processes have completed their iterations")
+            logger.debug("") # Insert a blank line in the debug log - makes it
+                             # easier to figure out where the loop iteration
+                             # stops
                      
     except KeyboardInterrupt:
         # Perfectly normal.  Ctrl-C is how we expect to exit
         logger.debug( "Exiting from main loop")
-    
-    
-def shutdown_subprocs( sfa_processes, update_time):
-    '''
-    Sends a 0 update time to all the subprocesses (which causes them to shut
-    down) and waits for them to end.
-    '''
-    
-            
-
-    
+      
 
 def main_func():
     # Quick summary:
@@ -164,6 +227,7 @@ def main_func():
             temp_log = logging.getLogger( log_name)
             temp_log.setLevel( logging.WARNING)
 
+    global logger
     logger = logging.getLogger( "DDNTool")
     
     # Initialize the database if requested
@@ -191,18 +255,7 @@ def main_func():
             bracket_aware_split(config.get('ddn_hardware', 'sfa_hosts')) ]
     bracket_expand( sfa_hosts)
     for host in sfa_hosts:
-        logger.debug( "Creating process for host '%s'"%host)
-        e = multiprocessing.Event()
-        e.clear()
-        p = multiprocessing.Process(name='DDNTool_' + host, target=one_controller,
-                                    args=(host, main_args.conf_file, e, update_time))
-        p.daemon = False
-        sfa_processes.append( ProcessData( p, e))
-        
-        logger.info("Starting background process for %s", host)
-        print "Starting background process for", host
-        p.start()
-        
+        sfa_processes.append( ProcessData( host, main_args.conf_file, update_time))       
         
     # All processes are started (and are waiting on their events). Have
     # the main loop take over...

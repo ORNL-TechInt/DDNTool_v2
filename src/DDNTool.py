@@ -111,10 +111,14 @@ def one_controller(host, conf_file, event, update_time):
     the polling and database updating for a single controller.
     '''
     logger = logging.getLogger( "DDNTool")
-      
-    client = SFAClient.SFAClient( host, conf_file, event, update_time)
-    client.run()
-    # run() loops until the main process sets update_time to 0
+    
+    try:
+        client = SFAClient.SFAClient( host, conf_file, event, update_time)
+        client.run()
+        # run() loops until the main process sets update_time to 0
+    except Exception, e:
+        logger.error( "Process %s caught %s exception."%(host,
+                                                         type(e).__name__))
 
     logger.info( "Process %s is exiting.", host)
     print "Process ", host, " is exiting."

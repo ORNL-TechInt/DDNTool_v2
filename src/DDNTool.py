@@ -12,6 +12,7 @@ import ConfigParser
 import argparse
 import multiprocessing
 import logging
+import logging.handlers # Don't delete this line! It's needed for logging to syslog!
 import os
 import signal
 import time

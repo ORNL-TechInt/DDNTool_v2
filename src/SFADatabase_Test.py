@@ -1,12 +1,30 @@
-'''
-Created on May 9, 2013
+# Created on May 9, 2013
+#
+# @author: Ross Miller
+# 
+# Copyright 2013, 2015 UT Battelle, LLC
+# 
+# This work was supported by the Oak Ridge Leadership Computing Facility at
+# the Oak Ridge National Laboratory, which is managed by UT Battelle, LLC for
+# the U.S. DOE (under the contract No. DE-AC05-00OR22725).
+# 
+# This file is part of DDNTool_v2.
+# 
+# DDNTool_v2 is free software: you can redistribute it and/or modify it under
+# the terms of the UT-Battelle Permissive Open Source License.  (See the
+# License.pdf file for details.)
+# 
+# DDNTool_v2 is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.
 
-@author: xmr
-'''
 
 # Note: these tests only work if there's a mysql server set up for us to write to...
+# TODO: We don't have a db.verify_main_table() function any more, which means this
+# test will abort down at the first assertEqual.   I should fix this!
+
 import unittest
-from SFADatabase import SFADatabase
+from SFAClientUtils.SFADatabase import SFADatabase
 
 DB_NAME = 'test'
 DB_HOST = 'localhost'

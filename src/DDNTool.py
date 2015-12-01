@@ -1,12 +1,29 @@
 #!/usr/bin/python
-'''
-Created on Mar 22, 2013
 
-This will eventually become the new DDN monitoring tool. (For SFA hardware only.  The old DDNTool is still
-needed for the S2A hardware.)
+# Created on Mar 22, 2013
+# 
+# @author: Ross Miller
+# 
+# Copyright 2013, 2015 UT Battelle, LLC
+# 
+# This work was supported by the Oak Ridge Leadership Computing Facility at
+# the Oak Ridge National Laboratory, which is managed by UT Battelle, LLC for
+# the U.S. DOE (under the contract No. DE-AC05-00OR22725).
+# 
+# This file is part of DDNTool_v2.
+# 
+# DDNTool_v2 is free software: you can redistribute it and/or modify it under
+# the terms of the UT-Battelle Permissive Open Source License.  (See the
+# License.pdf file for details.)
+# 
+# DDNTool_v2 is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.
 
-@author: Ross Miller
 '''
+This is the new DDN monitoring tool. (For SFA hardware only.  The old
+DDNTool is still needed for the S2A hardware.)
+''' 
 
 import ConfigParser
 import argparse
@@ -21,13 +38,17 @@ from SFAClientUtils import SFAClient, SFADatabase
 
 from bracket_expand import bracket_expand, bracket_aware_split
 
-###### Remote Debugging using winpdb #######
+####################### Remote Debugging using winpdb #######################
 #import rpdb2
-#rpdb2.start_embedded_debugger('xmr')
-# xmr is the session password - make sure port 51000 is open
-# Note: calling stat_embedded_debuger will cause the program execution to
+#rpdb2.start_embedded_debugger('xyz')
+#############################################################################
+# xyz is the session password - make sure port 51000 is open
+# Note: calling start_embedded_debuger will cause the program execution to
 # freeze until the debugger actually connects to it.
-#############################################
+# Note 2: rpdb2 is GPL, so we're not distributing it with this code.  It's
+# part of the WinPDB package which can be found at: 
+# http://winpdb.org/  OR  https://code.google.com/p/winpdb/
+#############################################################################
 
 DEFAULT_CONF_FILE="./ddntool.conf"  # config file to use if not specified on the command line 
 

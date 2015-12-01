@@ -1,33 +1,56 @@
 #!/usr/bin/python
-#
-# Python code to perform 'bracket expansion' similar to Bash shell.
-# Expects a list of strings containing bracket expressions such as:
-# "name[1-3][a,b]"
-# and expands them into a (longer) list of strings with the bracket
-# expressions evaluated.  The above example would be expanded to:
-# "name1a", "name2a", "name3a", "name1b", "name2b", "name3b",
-# "name1c", "name2c", "name3c"
-#
-# There are 2 types of bracket expression allowed:
-# itemized - where each token is separated by a comma
-# incremental - which is used to specify a range of numbers
+
+
+# Created on July 23, 2013
 # 
-# Incremental bracket expressions must consist of exactly 2
-# integers separated by a dash and the second integer must
-# be greater than the first.  That expression will be expanded
-# out into a list of integers from the first token to the second
-# (inclusive)
-#
-# Itemized bracket expressions may have any number of tokens, and
-# those tokens may be strings of arbitrary length and containing
-# any character except the comma or dash.
-#
-# Bracket expressions may not be nested!
-#
-# No guarantees are made about the order of the results.
-#
-# Note: This file is its own unit-test.  (See the 
-# "if __name__=='__main__'" test at the bottom.)
+# @author: Ross Miller
+# 
+# Copyright 2013, 2015 UT Battelle, LLC
+# 
+# This work was supported by the Oak Ridge Leadership Computing Facility at
+# the Oak Ridge National Laboratory, which is managed by UT Battelle, LLC for
+# the U.S. DOE (under the contract No. DE-AC05-00OR22725).
+# 
+# This file is part of DDNTool_v2.
+# 
+# DDNTool_v2 is free software: you can redistribute it and/or modify it under
+# the terms of the UT-Battelle Permissive Open Source License.  (See the
+# License.pdf file for details.)
+# 
+# DDNTool_v2 is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.
+
+'''
+Python code to perform 'bracket expansion' similar to Bash shell.
+Expects a list of strings containing bracket expressions such as:
+  "name[1-3][a,b]"
+and expands them into a (longer) list of strings with the bracket
+expressions evaluated.  The above example would be expanded to:
+  "name1a", "name2a", "name3a", "name1b", "name2b", "name3b",
+  "name1c", "name2c", "name3c"
+
+There are 2 types of bracket expression allowed:
+itemized: each token is separated by a comma
+incremental: used to specify a range of numbers
+ 
+Incremental bracket expressions must consist of exactly 2
+integers separated by a dash and the second integer must
+be greater than the first.  That expression will be expanded
+out into a list of integers from the first token to the second
+(inclusive)
+
+Itemized bracket expressions may have any number of tokens, and
+those tokens may be strings of arbitrary length and containing
+any character except the comma or dash.
+
+Bracket expressions may not be nested!
+
+No guarantees are made about the order of the results.
+
+Note: This file is its own unit-test.  (See the 
+"if __name__=='__main__'" test at the bottom.)
+'''
 
 
 class BracketGrammarError(Exception):

@@ -3,14 +3,23 @@
 # Lines starting with '#' or ';' are comments
 # A ';' in the middle of a line also indicates the rest of the line
 # is a comment.  Depending on your version of Python, you might be
-# about to use '#' for this, too, but not necessarily.
+# able to use '#' for this, too, but not necessarily.
 
-[database]
+# Note: the database section is deprecated and has been replaced with
+# the SqlDb section.  These lines are just included as an example.
+# [database]
+# # Replace these with legitimate values
+# db_host=localhost
+# db_name=my_database
+# db_user=my_db_user
+# db_password=my_db_pwd
+
+[SqlDb]
 # Replace these with legitimate values
-db_host=localhost
-db_name=my_database
-db_user=my_db_user
-db_password=my_db_pwd
+host=localhost
+name=my_database
+user=my_db_user
+password=my_db_pwd
 
 [polling]
 fast_poll_interval = 2.0 ; in seconds

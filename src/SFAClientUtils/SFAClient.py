@@ -434,12 +434,33 @@ class SFAClient():
         self._sfa_password = config.get('ddn_hardware', 'sfa_password')
         
         # Parameters for connecting to the MySQL (or MariaDB) database
-        self._sqldb_user = config.get('database', 'db_user')
-        self._sqldb_password = config.get('database', 'db_password')
-        self._sqldb_host = config.get('database', 'db_host')
-        self._sqldb_name = config.get('database', 'db_name')
+        output_defined = False
+        if config.has_section('SqlDb'):
+            self._sqldb_user = config.get('SqlDb', 'user')
+            self._sqldb_password = config.get('SqlDb', 'password')
+            self._sqldb_host = config.get('SqlDb', 'host')
+            self._sqldb_name = config.get('SqlDb', 'name')
+            output_defined = True
+            if config.has_section('database'):
+                self.logger.warn("Ignoring deprecated 'database' section in config file.")
+            
+        elif config.has_section('database'):
+            self.logger.warn("The 'database' section of the config file has been "
+                             "deprecated and support for it will eventually be "
+                             "removed.  Please use the 'SqlDb' section, instead.")
+            self._sqldb_user = config.get('database', 'db_user')
+            self._sqldb_password = config.get('database', 'db_password')
+            self._sqldb_host = config.get('database', 'db_host')
+            self._sqldb_name = config.get('database', 'db_name')
+            output_defined = True
+            
+        if output_defined == False:
+            # The config file didn't define a database to write to.  There's
+            # no point in starting up...
+            raise RuntimeError( "No output databases were defined in the config file. "
+                                "There's no place to write the results.")
 
-
+        
     def _time_series_init(self):
         '''
         Various initialization stats for all the time series data.  Must be called after the

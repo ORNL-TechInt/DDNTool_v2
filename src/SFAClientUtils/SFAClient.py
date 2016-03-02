@@ -21,7 +21,7 @@
 
 import ConfigParser
 import logging
-import SFADatabase
+import SFAMySqlDb
 from SFATimeSeries import SFATimeSeries
 from SFATimeSeries import EmptyTimeSeriesException
 
@@ -110,8 +110,8 @@ class SFAClient():
 
         # open a connection to the database
         self.logger.debug( 'Opening DB connection')
-        self._db = SFADatabase.SFADatabase(self._db_user, self._db_password,
-                                           self._db_host, self._db_name, False)
+        self._sqldb = SFAMySqlDb.SFAMySqlDb(self._sqldb_user, self._sqldb_password,
+                                            self._sqldb_host, self._sqldb_name, False)
         
         # connect to the SFA controller
         self.logger.debug( 'Connecting to DDN hardware')
@@ -324,7 +324,7 @@ class SFAClient():
                     self.logger.error( "Setting pool state to UNKNOWN!")
                     pool_state = 255
                 
-                self._db.update_lun_table(self._get_host_name(), self._update_time.value, 
+                self._sqldb.update_lun_table(self._get_host_name(), self._update_time.value, 
                                           lun_num, transfer_bandwidth[0],
                                           read_bandwidth[0], write_bandwidth[0],
                                           read_iops[0], write_iops[0],
@@ -349,7 +349,7 @@ class SFAClient():
             read_ios = (tmp_stats.ReadIOs[0] + tmp_stats.ReadIOs[1])
             write_ios = (tmp_stats.WriteIOs[0] + tmp_stats.WriteIOs[1])
             
-            self._db.update_raw_lun_table( self._get_host_name(), self._update_time.value,
+            self._sqldb.update_raw_lun_table( self._get_host_name(), self._update_time.value,
                           lun_num, transfer_bytes,read_bytes, write_bytes,
                           forwarded_bytes, total_ios, read_ios, write_ios,
                           forwarded_ios, pool_state)
@@ -363,7 +363,7 @@ class SFAClient():
 #                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
 #                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
 #                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
-#                self._db.update_dd_table(self._get_host_name(), self._update_time.value,
+#                self._sqldb.update_dd_table(self._get_host_name(), self._update_time.value,
 #                                   dd_num, bandwidth[0],
 #                                   read_iops[0], write_iops[0])
 #            except EmptyTimeSeriesException:
@@ -377,30 +377,30 @@ class SFAClient():
         '''
         for lun_num in self._vd_to_lun.values():
             request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
-            self._db.update_lun_request_size_table( self._get_host_name(),
+            self._sqldb.update_lun_request_size_table( self._get_host_name(),
                     self._update_time.value, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
-            self._db.update_lun_request_size_table( self._get_host_name(),
+            self._sqldb.update_lun_request_size_table( self._get_host_name(),
                     self._update_time.value, lun_num, False, request_values)
             request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
-            self._db.update_lun_request_latency_table( self._get_host_name(),
+            self._sqldb.update_lun_request_latency_table( self._get_host_name(),
                     self._update_time.value, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
-            self._db.update_lun_request_latency_table( self._get_host_name(),
+            self._sqldb.update_lun_request_latency_table( self._get_host_name(),
                     self._update_time.value, lun_num, False, request_values)
 
 #        for dd_num in self._dd_stats.keys():
 #            request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
-#            self._db.update_dd_request_size_table( self._get_host_name(),
+#            self._sqldb.update_dd_request_size_table( self._get_host_name(),
 #                    self._update_time.value, dd_num, True, request_values)
 #            request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
-#            self._db.update_dd_request_size_table( self._get_host_name(),
+#            self._sqldb.update_dd_request_size_table( self._get_host_name(),
 #                    self._update_time.value, dd_num, False, request_values)
 #            request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
-#            self._db.update_dd_request_latency_table( self._get_host_name(),
+#            self._sqldb.update_dd_request_latency_table( self._get_host_name(),
 #                    self._update_time.value, dd_num, True, request_values)
 #            request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
-#            self._db.update_dd_request_latency_table( self._get_host_name(),
+#            self._sqldb.update_dd_request_latency_table( self._get_host_name(),
 #                    self._update_time.value, dd_num, False, request_values)
 
         
@@ -433,11 +433,11 @@ class SFAClient():
         self._sfa_user = config.get('ddn_hardware', 'sfa_user')
         self._sfa_password = config.get('ddn_hardware', 'sfa_password')
         
-        # Parameters for connecting to the database
-        self._db_user = config.get('database', 'db_user')
-        self._db_password = config.get('database', 'db_password')
-        self._db_host = config.get('database', 'db_host')
-        self._db_name = config.get('database', 'db_name')
+        # Parameters for connecting to the MySQL (or MariaDB) database
+        self._sqldb_user = config.get('database', 'db_user')
+        self._sqldb_password = config.get('database', 'db_password')
+        self._sqldb_host = config.get('database', 'db_host')
+        self._sqldb_name = config.get('database', 'db_name')
 
 
     def _time_series_init(self):

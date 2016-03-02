@@ -34,7 +34,7 @@ import os
 import signal
 import time
 
-from SFAClientUtils import SFAClient, SFADatabase
+from SFAClientUtils import SFAClient, SFAMySqlDb
 
 from bracket_expand import bracket_expand, bracket_aware_split
 
@@ -52,8 +52,8 @@ from bracket_expand import bracket_expand, bracket_aware_split
 
 DEFAULT_CONF_FILE="./ddntool.conf"  # config file to use if not specified on the command line 
 
-logger = None  # logging object at global (module) scope so everyone can use it
-               # Initialized down in main_func()
+logger = None   # logging object at global (module) scope so everyone can use it
+                # Initialized down in main_func()
 
 class ProcessData:
     '''
@@ -194,9 +194,9 @@ def main_loop( proc_list, wake_time, update_time):
                 while p.is_alive() and p.e.is_set():
                     time.sleep( 0.01)
             logger.debug( "All sub-processes have completed their iterations")
-            logger.debug("") # Insert a blank line in the debug log - makes it
-                             # easier to figure out where the loop iteration
-                             # stops
+            logger.debug("")    # Insert a blank line in the debug log - makes
+                                # it easier to figure out where the loop 
+                                # iteration stops
                      
     except KeyboardInterrupt:
         # Perfectly normal.  Ctrl-C is how we expect to exit
@@ -273,7 +273,7 @@ def main_func():
         db_name = config.get('database', 'db_name')
         # don't actually need the db connection, but this is how we force
         # the db init code to run
-        db = SFADatabase.SFADatabase(db_user, db_password, db_host, db_name, main_args.init_db)  # @UnusedVariable
+        db = SFAMySqlDb.SFAMySqlDb(db_user, db_password, db_host, db_name, main_args.init_db)  # @UnusedVariable
         db = None  # @UnusedVariable
 
     # shared memory value that all the sub-processes will have access to

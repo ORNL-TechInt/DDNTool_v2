@@ -26,6 +26,7 @@ from SFATimeSeries import SFATimeSeries
 from SFATimeSeries import EmptyTimeSeriesException
 
 from ddn.sfa.api import *
+from pywbem.cim_operations import CIMError
 
 #
 # Note:  There are several code blocks that deal with the data from the 
@@ -115,7 +116,19 @@ class SFAClient():
         
         # connect to the SFA controller
         self.logger.debug( 'Connecting to DDN hardware')
-        APIConnect( self._uri, (self._sfa_user, self._sfa_password))        # @UndefinedVariable
+        try:
+            APIConnect( self._uri, (self._sfa_user, self._sfa_password))        # @UndefinedVariable
+        except CIMError, err:
+            # Not sure of all the reasons this exception might happen, but
+            # at least one is when we get a 'connection refused' error.
+            # We don't actually solve the problem here.  We just log the
+            # error message and then pass the exception up the stack
+            (err_code, desc) = err
+            self.logger.error( 'CIMError connecting to %s - code: %d   desc: %s'%(self._uri, err_code, desc))
+            
+            raise err 
+            
+            
         self.logger.debug( 'Connection established.')
 
         self.logger.debug( 'Calling _time_series_init()')

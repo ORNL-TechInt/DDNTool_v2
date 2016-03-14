@@ -120,13 +120,18 @@ class SFAClient():
             APIConnect( self._uri, (self._sfa_user, self._sfa_password))        # @UndefinedVariable
         except CIMError, err:
             # Not sure of all the reasons this exception might happen, but
-            # at least one is when we get a 'connection refused' error.
+            # known ones are:
+            # (0, 'Socket error: [Errno -2] Name or service not known')
+            # (0, 'Socket error: [Errno 111] Connection refused')
+            #
             # We don't actually solve the problem here.  We just log the
             # error message and then pass the exception up the stack
-            (err_code, desc) = err
-            self.logger.error( 'CIMError connecting to %s - code: %d   desc: %s'%(self._uri, err_code, desc))
-            
-            raise err 
+            self.logger.error( 'CIMError connecting to "%s"    Error code: %d   Desc: %s'%(self._uri, err[0], err[1]))          
+            raise err
+        except APIContextException, err:
+            # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
+            self.logger.error( 'APIContextException connecting to "%s"    Details: %s'%(self._uri, err))          
+            raise err
             
             
         self.logger.debug( 'Connection established.')
@@ -203,17 +208,17 @@ class SFAClient():
             # to ensure that everything is polled at least once before we try to push
             # anything to the database
             ############# Fast Interval Stuff #######################
-            self._fast_database_tasks()
+            self._fast_sqldb_tasks()
                         
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):
                 self.logger.debug( 'Executing medium rate DB tasks')
-                self._medium_database_tasks()
+                self._medium_sqldb_tasks()
             
             ############# Slow Interval Stuff #######################
             if (fast_iteration % self._slow_poll_multiple == 0):
                 self.logger.debug( 'Executing slow rate DB tasks')
-                self._slow_database_tasks()
+                self._slow_sqldb_tasks()
                         
             self._event.clear();    # Clear the event to signal that we're done
                                     # processing this iteration
@@ -313,9 +318,9 @@ class SFAClient():
         pass # no slow poll tasks yet
 
     
-    def _fast_database_tasks(self):
+    def _fast_sqldb_tasks(self):
         '''
-        Update all the values in the database that need to be updated at the fast rate.
+        Update all the values in the SQL database that need to be updated at the fast rate.
         '''
 
         for lun_num in self._vd_to_lun.values():
@@ -384,9 +389,9 @@ class SFAClient():
 #                      (self._get_host_name(), dd_num)
 
 
-    def _medium_database_tasks(self):
+    def _medium_sqldb_tasks(self):
         '''
-        Update all the values in the database that need to be updated at the medium rate.
+        Update all the values in the SQL database that need to be updated at the medium rate.
         '''
         for lun_num in self._vd_to_lun.values():
             request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
@@ -417,9 +422,9 @@ class SFAClient():
 #                    self._update_time.value, dd_num, False, request_values)
 
         
-    def _slow_database_tasks(self):
+    def _slow_sqldb_tasks(self):
         '''
-        Update all the values in the database that need to be updated at the slow rate.
+        Update all the values in the SQL database that need to be updated at the slow rate.
         '''
         pass  # no slow tasks yet
 
@@ -623,24 +628,4 @@ class SFAClient():
         
         return not version_too_low
         
-
-# NOTE: this function is commented out for now while I decide upon the best way to
-# deal with exceptions thrown during the connection process.  At the moment, I'm
-# just calling APIConnect() directly and passing any exceptions up the stack.     
-#    def _sfa_connect(self):
-#        '''
-#        Log in to the DDN hardware
-#        '''
-#        try:
-#            APIConnect( self._uri, (self._user, self._password))
-#            # Note: this will throw an exception if it can't connect
-#            # Known exceptions:
-#            # ddn.sfa.core.APIContextException: -2: Invalid username and/or password
-#            # pywbem.cim_operations.CIMError: (0, 'Socket error: [Errno -2] Name or service not known')
-#            self._sfa_connected = True;
-#        except APIContextException, e:
-#            pass
-#        #except CIMError, e:
-#        #    pass
-
         

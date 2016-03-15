@@ -131,8 +131,8 @@ class SFAMySqlDb(object):
         '''
 
         # Get the logger object
-        self.logger = logging.getLogger( 'DDNTool_SFADatabase')
-        self.logger.debug( 'Creating instance of SFADatabase')
+        self.logger = logging.getLogger( 'DDNTool_SFAMySqlDb')
+        self.logger.debug( 'Creating instance of SFAMySqlDb')
 
         self._dbcon = mysql.connector.connect(user = user, password = password,
                                               host = host, database = db_name)
@@ -256,7 +256,7 @@ class SFAMySqlDb(object):
     def update_lun_request_latency_table( self, sfa_client_name, update_time,
                                           lun_num, read_table, latency_buckets):
         '''
-        Update the read or write request size data (depending on the value of the read_table
+        Update the read or write request latency data (depending on the value of the read_table
         boolean) for one lun on one client.  latency_buckets is a list containing
         the number of requests that were handled in each time frame and is expected to match
         the latency values listed in the column headings.
@@ -319,7 +319,7 @@ class SFAMySqlDb(object):
     def update_dd_request_latency_table( self, sfa_client_name, update_time,
                                          disk_num, read_table, latency_buckets):
         '''
-        Update the read or write request size data (depending on the value of the read_table
+        Update the read or write request latency data (depending on the value of the read_table
         boolean) for one disk drive on one client.  latency_buckets is a list containing
         the number of requests that were handled in each time frame and is expected to match
         the latency values listed in the column headings.

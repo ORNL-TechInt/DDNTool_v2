@@ -22,6 +22,7 @@
 import ConfigParser
 import logging
 import SFAMySqlDb
+import SFAInfluxDb
 from SFATimeSeries import SFATimeSeries
 from SFATimeSeries import EmptyTimeSeriesException
 
@@ -109,11 +110,17 @@ class SFAClient():
         # LUN number is the value.) It's updated at the medium frequency.
         self._vd_to_lun = { }
 
-        # open a connection to the database
-        self.logger.debug( 'Opening DB connection')
-        self._sqldb = SFAMySqlDb.SFAMySqlDb(self._sqldb_user, self._sqldb_password,
-                                            self._sqldb_host, self._sqldb_name, False)
-        
+        # open a connection to the database(s)
+        if self._have_sqldb:
+            self.logger.debug( 'Opening SQL DB connection')
+            self._sqldb = SFAMySqlDb.SFAMySqlDb(self._sqldb_user, self._sqldb_password,
+                                                self._sqldb_host, self._sqldb_name, False)
+            
+        if self._have_tsdb:
+            self.logger.debug( 'Opening time series DB connection')
+            self._tsdb = SFAInfluxDb.SFAInfluxDb(self._tsdb_user, self._tsdb_password,
+                                                 self._tsdb_host, self._tsdb_name)
+    
         # connect to the SFA controller
         self.logger.debug( 'Connecting to DDN hardware')
         try:
@@ -208,17 +215,27 @@ class SFAClient():
             # to ensure that everything is polled at least once before we try to push
             # anything to the database
             ############# Fast Interval Stuff #######################
-            self._fast_sqldb_tasks()
+            if self._have_sqldb:
+                self._fast_sqldb_tasks()
+                           
+            if self._have_tsdb:
+                self._fast_tsdb_tasks()
                         
             ############# Medium Interval Stuff #####################
             if (fast_iteration % self._med_poll_multiple == 0):
                 self.logger.debug( 'Executing medium rate DB tasks')
-                self._medium_sqldb_tasks()
+                if self._have_sqldb:
+                    self._medium_sqldb_tasks()
+                if self._have_tsdb:
+                    self._medium_tsdb_tasks()
             
             ############# Slow Interval Stuff #######################
             if (fast_iteration % self._slow_poll_multiple == 0):
                 self.logger.debug( 'Executing slow rate DB tasks')
-                self._slow_sqldb_tasks()
+                if self._have_sqldb:
+                    self._slow_sqldb_tasks()
+                if self._have_tsdb:
+                    self._slow_tsdb_tasks()
                         
             self._event.clear();    # Clear the event to signal that we're done
                                     # processing this iteration
@@ -427,6 +444,74 @@ class SFAClient():
         Update all the values in the SQL database that need to be updated at the slow rate.
         '''
         pass  # no slow tasks yet
+    
+    def _fast_tsdb_tasks(self):
+        '''
+        Update all the values in the time-series database that need to be
+        updated at the fast rate.
+        '''
+        
+        for lun_num in self._vd_to_lun.values():
+            # grab the raw values out of the saved stats object
+            tmp_stats = self._vd_stats[lun_num]
+            
+            read_bytes = (tmp_stats.KBytesRead[0] + tmp_stats.KBytesRead[1]) * 1024
+            write_bytes = (tmp_stats.KBytesWritten[0] + tmp_stats.KBytesWritten[1]) * 1024
+            transfer_bytes = (tmp_stats.KBytesTransferred[0] + tmp_stats.KBytesTransferred[1]) * 1024
+            forwarded_bytes = (tmp_stats.KBytesForwarded[0] + tmp_stats.KBytesForwarded[1]) * 1024
+            # Note: converted to bytes
+            
+            total_ios = (tmp_stats.TotalIOs[0] + tmp_stats.TotalIOs[1])
+            forwarded_ios = (tmp_stats.ForwardedIOs[0] + tmp_stats.ForwardedIOs[1])
+            read_ios = (tmp_stats.ReadIOs[0] + tmp_stats.ReadIOs[1])
+            write_ios = (tmp_stats.WriteIOs[0] + tmp_stats.WriteIOs[1])
+            
+            # Get the pool state we copied out of the associated SFAStoragePool object
+            # Note: this object is only updated at the medium rate
+            try:
+                pool_state = self._storage_pool_states[lun_num]
+            except KeyError:
+                self.logger.error( "No storage pool states mapped to LUN number %d!!"%lun_num)
+                self.logger.error( "Setting pool state to UNKNOWN!")
+                pool_state = 255
+                
+            # TODO everything above this comment is pretty much directly copied from 
+            # _fast_sqldb_tasks().  We should probably move the code to a single location
+            # (_fast_poll_tasks, maybe?)
+            
+            self._tsdb.update_lun_series( self._get_host_name(), self._update_time.value,
+                          lun_num, transfer_bytes,read_bytes, write_bytes,
+                          forwarded_bytes, total_ios, read_ios, write_ios,
+                          forwarded_ios, pool_state)
+        
+    
+    def _medium_tsdb_tasks(self):
+        '''
+        Update all the values in the time-series database that need to be
+        updated at the medium rate.
+        '''
+        
+        for lun_num in self._vd_to_lun.values():
+            request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
+            self._tsdb.update_lun_request_size_series( self._get_host_name(),
+                    self._update_time.value, lun_num, True, request_values)
+            request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
+            self._tsdb.update_lun_request_size_series( self._get_host_name(),
+                    self._update_time.value, lun_num, False, request_values)
+            request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
+            self._tsdb.update_lun_request_latency_series( self._get_host_name(),
+                    self._update_time.value, lun_num, True, request_values)
+            request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
+            self._tsdb.update_lun_request_latency_series( self._get_host_name(),
+                    self._update_time.value, lun_num, False, request_values)
+            
+    
+    def _slow_tsdb_tasks(self):
+        '''
+        Update all the values in the time-series database that need to be
+        updated at the slow rate.
+        '''
+        pass  # no slow tasks yet
 
 
     def _parse_config_file(self, conf_file):
@@ -453,11 +538,14 @@ class SFAClient():
         
         # Parameters for connecting to the MySQL (or MariaDB) database
         output_defined = False
+        self._have_sqldb = False
+        self._have_tsdb = False
         if config.has_section('SqlDb'):
             self._sqldb_user = config.get('SqlDb', 'user')
             self._sqldb_password = config.get('SqlDb', 'password')
             self._sqldb_host = config.get('SqlDb', 'host')
             self._sqldb_name = config.get('SqlDb', 'name')
+            self._have_sqldb = True
             output_defined = True
             if config.has_section('database'):
                 self.logger.warn("Ignoring deprecated 'database' section in config file.")
@@ -470,8 +558,17 @@ class SFAClient():
             self._sqldb_password = config.get('database', 'db_password')
             self._sqldb_host = config.get('database', 'db_host')
             self._sqldb_name = config.get('database', 'db_name')
+            self._have_sqldb = True
             output_defined = True
-            
+           
+        if config.has_section('TSDb'):
+            self._tsdb_user = config.get('TSDb', 'user')
+            self._tsdb_password = config.get('TSDb', 'password')
+            self._tsdb_host = config.get('TSDb', 'host')
+            self._tsdb_name = config.get('TSDb', 'name')
+            self._have_tsdb = True
+            output_defined = True
+             
         if output_defined == False:
             # The config file didn't define a database to write to.  There's
             # no point in starting up...

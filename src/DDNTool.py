@@ -145,7 +145,7 @@ def one_controller(host, conf_file, event, update_time):
         client.run()
         # run() loops until the main process sets update_time to 0
     except Exception, e:
-        logger.error( "Process %s caught %s exception."%(host,
+        logger.exception( "Process %s caught %s exception."%(host,
                                                          type(e).__name__))
 
     logger.info( "Process %s is exiting.", host)
@@ -252,13 +252,17 @@ def main_func():
         root_logger.setLevel( logging.INFO)
         
         # Disable some of the more excessive log messages that
-        # the DDN API and its supporting libraries emit
+        # the DDN API and some other libraries emit
         for log_name in [ 'APIContext', 'pywebm', 'root',
                           'SFADiskDriveStatistics', 'SFAPresentation',
                           'SFAVirtualDiskStatistics' ]:
             temp_log = logging.getLogger( log_name)
             temp_log.setLevel( logging.WARNING)
 
+    # the requests package (used by the influx package) is very verbose, so
+    # limit it even when we're in debug mode
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    
     global logger
     logger = logging.getLogger( "DDNTool")
     
@@ -267,14 +271,29 @@ def main_func():
         logger.info(  "Initializing the the database...")
         print "Initializing the the database..."
         logger.debug( "Initializing the the database...")
-        db_user = config.get('database', 'db_user')
-        db_password = config.get('database', 'db_password')
-        db_host = config.get('database', 'db_host')
-        db_name = config.get('database', 'db_name')
-        # don't actually need the db connection, but this is how we force
-        # the db init code to run
-        db = SFAMySqlDb.SFAMySqlDb(db_user, db_password, db_host, db_name, main_args.init_db)  # @UnusedVariable
-        db = None  # @UnusedVariable
+
+        sqldb_configured = False
+        if config.has_section('SqlDb'):
+            sqldb_user = config.get('SqlDb', 'user')
+            sqldb_password = config.get('SqlDb', 'password')
+            sqldb_host = config.get('SqlDb', 'host')
+            sqldb_name = config.get('SqlDb', 'name')
+            sqldb_configured = True
+        elif config.has_section('database'):
+            sqldb_user = config.get('database', 'db_user')
+            sqldb_password = config.get('database', 'db_password')
+            sqldb_host = config.get('database', 'db_host')
+            sqldb_name = config.get('database', 'db_name')
+            sqldb_configured = True       
+        
+        if sqldb_configured:
+            # don't actually need the db connection, but this is how we force
+            # the db init code to run
+            db = SFAMySqlDb.SFAMySqlDb(sqldb_user, sqldb_password,   # @UnusedVariable
+                                       sqldb_host, sqldb_name,
+                                       main_args.init_db)
+            db = None  # @UnusedVariable
+        # Note: no initialization needed for the time-series database
 
     # shared memory value that all the sub-processes will have access to
     # main_loop() will update it with the time the sub-processes will use

@@ -4,6 +4,10 @@
 # A ';' in the middle of a line also indicates the rest of the line
 # is a comment.  Depending on your version of Python, you might be
 # able to use '#' for this, too, but not necessarily.
+#
+# At least one database output section is required (database, SqlDb 
+# and/or TSDb).  Outputting to both an SQL database and a time-series
+# database simultaneously is supported.
 
 # Note: the database section is deprecated and has been replaced with
 # the SqlDb section.  These lines are just included as an example.
@@ -15,11 +19,21 @@
 # db_password=my_db_pwd
 
 [SqlDb]
+# Output to an SQL database (currently MySQL)
 # Replace these with legitimate values
 host=localhost
 name=my_database
 user=my_db_user
 password=my_db_pwd
+
+[TSDb]
+# Output to a time-series database (currently InfluxDB)
+# Replace these with legitimate values
+host=localhost
+name=my_database
+user=my_db_user
+password=my_db_pwd
+
 
 [polling]
 fast_poll_interval = 2.0 ; in seconds

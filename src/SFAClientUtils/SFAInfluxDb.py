@@ -18,7 +18,7 @@
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE.
 
-
+import copy
 import logging
 from influxdb import InfluxDBClient
 
@@ -124,8 +124,9 @@ class SFAInfluxDb(object):
         # Schema:
         # Measurement is named either 'read_request_sizes' or 
         # 'write_request_sizes' (depending on value of read_series)
-        # Tags: sfa host name, lun number
-        # Fields: one for each size bucket
+        # Tags: sfa host name, lun number, bucket
+        # Fields: value
+    
         
         # sanity check
         if len(size_buckets) != len(self._expected_size_field_values):
@@ -133,7 +134,10 @@ class SFAInfluxDb(object):
         
             
         # this is what will be sent over to the influx server
-        json_body = [ {
+        json_body = [ ]
+        
+        # structure to hold one mesurement
+        measurement = {
             "time" : update_time * 1000000000,
             # influx wants time in nano-seconds
             "tags": {
@@ -141,16 +145,18 @@ class SFAInfluxDb(object):
                 "lun_num" : lun_num 
             },
             "fields" :  {}
-        } ]
+        }
         
         if (read_series):
-            json_body[0]["measurement"] = "read_request_sizes"
+            measurement["measurement"] = "read_request_sizes"
         else:
-            json_body[0]["measurement"] = "write_request_sizes"
+            measurement["measurement"] = "write_request_sizes"
 
         # add measurements to json_body for each bucket
         for i in range(len(size_buckets)):
-            json_body[0]["fields"][self._expected_size_field_values[i]] = size_buckets[i]
+            measurement["tags"]["bucket"] = self._expected_size_field_values[i]
+            measurement["fields"]["value"] = size_buckets[i]
+            json_body.append( copy.deepcopy(measurement))
             
         self._dbcon.write_points(json_body)   
                      
@@ -168,8 +174,8 @@ class SFAInfluxDb(object):
         # Schema:
         # Measurement is named either 'read_request_latencies' or 
         # 'write_request_latencies' (depending on value of read_series)
-        # Tags: sfa host name, lun number
-        # Fields: one for each latency bucket
+        # Tags: sfa host name, lun number, bucket
+        # Fields: value
         
         # sanity check
         if len(latency_buckets) != len(self._expected_latency_field_values):
@@ -177,7 +183,10 @@ class SFAInfluxDb(object):
         
             
         # this is what will be sent over to the influx server
-        json_body = [ {
+        json_body = [ ]
+        
+        # structure to hold one mesurement
+        measurement = {
             "time" : update_time * 1000000000,
             # influx wants time in nano-seconds
             "tags": {
@@ -185,15 +194,17 @@ class SFAInfluxDb(object):
                 "lun_num" : lun_num 
             },
             "fields" :  {}
-        } ]
+        }
         
         if (read_series):
-            json_body[0]["measurement"] = "read_request_latencies"
+            measurement["measurement"] = "read_request_latencies"
         else:
-            json_body[0]["measurement"] = "write_request_latencies"
+            measurement["measurement"] = "write_request_latencies"
 
         # add measurements to json_body for each bucket
         for i in range(len(latency_buckets)):
-            json_body[0]["fields"][self._expected_latency_field_values[i]] = latency_buckets[i]
+            measurement["tags"]["bucket"] = self._expected_latency_field_values[i]
+            measurement["fields"]["value"] = latency_buckets[i]
+            json_body.append( copy.deepcopy(measurement))
             
         self._dbcon.write_points(json_body)   

@@ -9,7 +9,7 @@ This package is designed to simultaneoulsly monitor multiple DDN SFA disk contro
 This code depends on the following libraries and packages which may need to be installed seperately:
 * DDN's SFA client library (check for `MINIMUM_FW_VER` in SFAClient.py for the minimum required version)
 * The MySQL connector package (if outputting to MySQL or MariaDB)
-* The influxdb-python package available from https://github.com/influxdata/influxdb-python(if outputting to InfluxDB)
+* The influxdb-python package available from https://github.com/influxdata/influxdb-python (if outputting to InfluxDB)
   * The influxdb-python package itself depends on the python-requests package
 * For debugging, I've found it useful to use the winpdb debugger.  This requires importing rpdb2.py.  See the comments near the top of DDNTool.py
 

@@ -21,6 +21,16 @@
 import copy
 import logging
 from influxdb import InfluxDBClient
+from influxdb.exceptions import InfluxDBClientError
+
+# Dictionary of the measurement names we'll use in the database
+MEASUREMENT_NAMES = {
+    "LUN_DATA" : "lun_data",
+    "READ_REQUEST_SIZES" : "read_request_sizes",
+    "WRITE_REQUEST_SIZES" : "write_request_sizes",
+    "READ_REQUEST_LATENCIES" : "read_request_latencies",
+    "WRITE_REQUEST_LATENCIES" : "write_request_latencies"
+}
 
 
 class SFAInfluxDb(object):
@@ -44,7 +54,7 @@ class SFAInfluxDb(object):
 
 
 
-    def __init__(self, user, password, host, db_name):
+    def __init__(self, user, password, host, db_name, init = False):
         '''
         Connect to the InfluxDB server
         
@@ -59,8 +69,18 @@ class SFAInfluxDb(object):
         self.logger.debug( 'Creating instance of SFAInfluxDb')
 
         # open the database connection
-        self._dbcon = InfluxDBClient(host=host, port=8086, username=user, password=password, database=db_name) 
+        self._dbcon = InfluxDBClient(host=host, port=8086, username=user, password=password, database=db_name)
         
+        if init:
+            for name in MEASUREMENT_NAMES.values():
+                try:
+                    query = "DROP MEASUREMENT %s"%name
+                    self._dbcon.query(query)
+                except InfluxDBClientError, err:
+                    # Ignore measurement not found; re-raise for all others
+                    if err.message.find('measurement not found') == -1:
+                        raise err
+                            
     
     def update_lun_series( self, sfa_host_name, update_time, lun_num,
                            transfer_bytes, read_bytes, write_bytes,
@@ -89,7 +109,7 @@ class SFAInfluxDb(object):
         
         # this is what will be sent over to the influx server
         json_body = [ {
-           "measurement": "lun_data",
+           "measurement": MEASUREMENT_NAMES["LUN_DATA"],
            "tags": {
                 "sfa_host": sfa_host_name,
                 "lun_num": lun_num
@@ -131,7 +151,6 @@ class SFAInfluxDb(object):
         # sanity check
         if len(size_buckets) != len(self._expected_size_field_values):
             raise RuntimeError( "Invalid number of size buckets")
-        
             
         # this is what will be sent over to the influx server
         json_body = [ ]
@@ -148,9 +167,9 @@ class SFAInfluxDb(object):
         }
         
         if (read_series):
-            measurement["measurement"] = "read_request_sizes"
+            measurement["measurement"] = MEASUREMENT_NAMES["READ_REQUEST_SIZES"]
         else:
-            measurement["measurement"] = "write_request_sizes"
+            measurement["measurement"] = MEASUREMENT_NAMES["WRITE_REQUEST_SIZES"]
 
         # add measurements to json_body for each bucket
         for i in range(len(size_buckets)):
@@ -179,8 +198,7 @@ class SFAInfluxDb(object):
         
         # sanity check
         if len(latency_buckets) != len(self._expected_latency_field_values):
-            raise RuntimeError( "Invalid number of size buckets")
-        
+            raise RuntimeError( "Invalid number of size buckets")       
             
         # this is what will be sent over to the influx server
         json_body = [ ]
@@ -197,9 +215,9 @@ class SFAInfluxDb(object):
         }
         
         if (read_series):
-            measurement["measurement"] = "read_request_latencies"
+            measurement["measurement"] = MEASUREMENT_NAMES["READ_REQUEST_LATENCIES"]
         else:
-            measurement["measurement"] = "write_request_latencies"
+            measurement["measurement"] = MEASUREMENT_NAMES["WRITE_REQUEST_LATENCIES"]
 
         # add measurements to json_body for each bucket
         for i in range(len(latency_buckets)):

@@ -119,7 +119,7 @@ class SFAClient():
         if self._have_tsdb:
             self.logger.debug( 'Opening time series DB connection')
             self._tsdb = SFAInfluxDb.SFAInfluxDb(self._tsdb_user, self._tsdb_password,
-                                                 self._tsdb_host, self._tsdb_name)
+                                                 self._tsdb_host, self._tsdb_name, False)
     
         # connect to the SFA controller
         self.logger.debug( 'Connecting to DDN hardware')

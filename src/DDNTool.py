@@ -34,7 +34,7 @@ import os
 import signal
 import time
 
-from SFAClientUtils import SFAClient, SFAMySqlDb
+from SFAClientUtils import SFAClient, SFAMySqlDb, SFAInfluxDb
 
 from bracket_expand import bracket_expand, bracket_aware_split
 
@@ -266,11 +266,10 @@ def main_func():
     global logger
     logger = logging.getLogger( "DDNTool")
     
-    # Initialize the database if requested
+    # Initialize the database(s) if requested
     if  main_args.init_db:
-        logger.info(  "Initializing the the database...")
-        print "Initializing the the database..."
-        logger.debug( "Initializing the the database...")
+        logger.info(  "Initializing the the database(s)...")
+        print "Initializing the the database(s)..."
 
         sqldb_configured = False
         if config.has_section('SqlDb'):
@@ -293,7 +292,18 @@ def main_func():
                                        sqldb_host, sqldb_name,
                                        main_args.init_db)
             db = None  # @UnusedVariable
-        # Note: no initialization needed for the time-series database
+        
+        if config.has_section('TSDb'):
+            tsdb_user = config.get('TSDb', 'user')
+            tsdb_password = config.get('TSDb', 'password')
+            tsdb_host = config.get('TSDb', 'host')
+            tsdb_name = config.get('TSDb', 'name')
+            # Again, we don't actually need the db connection here, but it's how we
+            # force the init code to run
+            db = SFAInfluxDb.SFAInfluxDb( tsdb_user, tsdb_password, # @UnusedVariable
+                                          tsdb_host, tsdb_name,
+                                          main_args.init_db)
+            db = None # @UnusedVariable
 
     # shared memory value that all the sub-processes will have access to
     # main_loop() will update it with the time the sub-processes will use

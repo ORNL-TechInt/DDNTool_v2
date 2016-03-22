@@ -327,10 +327,15 @@ def main_func():
     # Make sure all the events have been cleared by the sub processes
     # (Prevents a race condition caused by the fact that each sub-process
     # clears its event at the bottom of its loop.)
-    for p in sfa_processes:
-        if p.is_alive() and p.e.is_set():
-            time.sleep( 0.01)  
     
+    logger.info( "Exited from main loop.  Waiting for subprocesses to finish"
+                  " their current loop iteration.")
+    for p in sfa_processes:
+        while p.is_alive() and p.e.is_set():
+            time.sleep( 0.01)  # sleep waiting for sub-process to finish its current task  
+    
+    logger.debug( "All processes have finished current event.  "
+                  "Setting update time to 0.")
     # Shut down all the sub-procs and exit
     update_time.value = 0   # Subprocs interpret a 0 update time as a
                             # shutdown command
@@ -338,6 +343,7 @@ def main_func():
         if p.is_alive():
             p.e.set()
         
+    logger.debug( "Waiting for processes to shut down.")
     for p in sfa_processes:
         if p.is_alive():
             p.p.join()

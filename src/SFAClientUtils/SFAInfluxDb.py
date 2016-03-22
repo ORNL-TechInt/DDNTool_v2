@@ -94,15 +94,7 @@ class SFAInfluxDb(object):
         # Everything goes into one measurement (called lun_data)
         #   tags: sfa host name, lun number
         #   values: bytes read, bytes written, bytes transferred, bytes
-        #   forwarded, read iops, write iops, forwarded iops and pool state
-        
-        if update_time == 0:
-            # Sometimes, when the user has hit ctrl-C to exit the program,
-            # we'll see several calls to this function with 0 for the
-            # update time.  We'll ignore them.
-            #
-            # TODO: figure out *why* we get 0's and fix it!
-            return
+        #   forwarded, read iops, write iops, forwarded iops and pool state    
         
         # self.logger.debug( 'Updating lun data for lun %d at %s'%(lun_num, update_time))
         # This generages too much output, even for debug

@@ -154,6 +154,9 @@ class SFAClient():
         # multiprocessing.Value object
         self._event = event
         self._update_time = update_time
+        # keep a local copy of the time value that we're sure won't change in
+        # the middle of the main loop
+        self._non_shared_update_time = 0  
         
         self.logger.debug( '__init__ completed')
         
@@ -193,12 +196,16 @@ class SFAClient():
                       
             fast_iteration += 1
             
-            # Check if we're supposed to exit
-            if self._update_time.value == 0:
+            # Grab a copy of the update time and check if we're
+            # supposed to exit
+            # Note: this should be the only place in this module where
+            # _update_time.value is referenced
+            self._non_shared_update_time = self._update_time.value 
+            if self._non_shared_update_time == 0:
                 self._exit_requested = True
                 break
-                
             
+                
             ############# Fast Interval Stuff #######################
             self._fast_poll_tasks()           
             
@@ -359,7 +366,7 @@ class SFAClient():
                     self.logger.error( "Setting pool state to UNKNOWN!")
                     pool_state = 255
                 
-                self._sqldb.update_lun_table(self._get_host_name(), self._update_time.value, 
+                self._sqldb.update_lun_table(self._get_host_name(), self._non_shared_update_time, 
                                           lun_num, transfer_bandwidth[0],
                                           read_bandwidth[0], write_bandwidth[0],
                                           read_iops[0], write_iops[0],
@@ -384,7 +391,7 @@ class SFAClient():
             read_ios = (tmp_stats.ReadIOs[0] + tmp_stats.ReadIOs[1])
             write_ios = (tmp_stats.WriteIOs[0] + tmp_stats.WriteIOs[1])
             
-            self._sqldb.update_raw_lun_table( self._get_host_name(), self._update_time.value,
+            self._sqldb.update_raw_lun_table( self._get_host_name(), self._non_shared_update_time,
                           lun_num, transfer_bytes,read_bytes, write_bytes,
                           forwarded_bytes, total_ios, read_ios, write_ios,
                           forwarded_ios, pool_state)
@@ -398,7 +405,7 @@ class SFAClient():
 #                read_iops = self._get_time_series_average( 'dd_read_iops', dd_num, 60)
 #                write_iops = self._get_time_series_average( 'dd_write_iops', dd_num, 60)
 #                bandwidth = self._get_time_series_average( 'dd_transfer_bytes', dd_num, 60)
-#                self._sqldb.update_dd_table(self._get_host_name(), self._update_time.value,
+#                self._sqldb.update_dd_table(self._get_host_name(), self._non_shared_update_time,
 #                                   dd_num, bandwidth[0],
 #                                   read_iops[0], write_iops[0])
 #            except EmptyTimeSeriesException:
@@ -413,30 +420,30 @@ class SFAClient():
         for lun_num in self._vd_to_lun.values():
             request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
             self._sqldb.update_lun_request_size_table( self._get_host_name(),
-                    self._update_time.value, lun_num, True, request_values)
+                    self._non_shared_update_time, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
             self._sqldb.update_lun_request_size_table( self._get_host_name(),
-                    self._update_time.value, lun_num, False, request_values)
+                    self._non_shared_update_time, lun_num, False, request_values)
             request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
             self._sqldb.update_lun_request_latency_table( self._get_host_name(),
-                    self._update_time.value, lun_num, True, request_values)
+                    self._non_shared_update_time, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
             self._sqldb.update_lun_request_latency_table( self._get_host_name(),
-                    self._update_time.value, lun_num, False, request_values)
+                    self._non_shared_update_time, lun_num, False, request_values)
 
 #        for dd_num in self._dd_stats.keys():
 #            request_values = self._dd_stats[dd_num].ReadIOSizeBuckets
 #            self._sqldb.update_dd_request_size_table( self._get_host_name(),
-#                    self._update_time.value, dd_num, True, request_values)
+#                    self._non_shared_update_time, dd_num, True, request_values)
 #            request_values = self._dd_stats[dd_num].WriteIOSizeBuckets
 #            self._sqldb.update_dd_request_size_table( self._get_host_name(),
-#                    self._update_time.value, dd_num, False, request_values)
+#                    self._non_shared_update_time, dd_num, False, request_values)
 #            request_values = self._dd_stats[dd_num].ReadIOLatencyBuckets
 #            self._sqldb.update_dd_request_latency_table( self._get_host_name(),
-#                    self._update_time.value, dd_num, True, request_values)
+#                    self._non_shared_update_time, dd_num, True, request_values)
 #            request_values = self._dd_stats[dd_num].WriteIOLatencyBuckets
 #            self._sqldb.update_dd_request_latency_table( self._get_host_name(),
-#                    self._update_time.value, dd_num, False, request_values)
+#                    self._non_shared_update_time, dd_num, False, request_values)
 
         
     def _slow_sqldb_tasks(self):
@@ -479,7 +486,7 @@ class SFAClient():
             # _fast_sqldb_tasks().  We should probably move the code to a single location
             # (_fast_poll_tasks, maybe?)
             
-            self._tsdb.update_lun_series( self._get_host_name(), self._update_time.value,
+            self._tsdb.update_lun_series( self._get_host_name(), self._non_shared_update_time,
                           lun_num, transfer_bytes,read_bytes, write_bytes,
                           forwarded_bytes, total_ios, read_ios, write_ios,
                           forwarded_ios, pool_state)
@@ -494,16 +501,16 @@ class SFAClient():
         for lun_num in self._vd_to_lun.values():
             request_values =  self._vd_stats[lun_num].ReadIOSizeBuckets
             self._tsdb.update_lun_request_size_series( self._get_host_name(),
-                    self._update_time.value, lun_num, True, request_values)
+                    self._non_shared_update_time, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOSizeBuckets
             self._tsdb.update_lun_request_size_series( self._get_host_name(),
-                    self._update_time.value, lun_num, False, request_values)
+                    self._non_shared_update_time, lun_num, False, request_values)
             request_values =  self._vd_stats[lun_num].ReadIOLatencyBuckets
             self._tsdb.update_lun_request_latency_series( self._get_host_name(),
-                    self._update_time.value, lun_num, True, request_values)
+                    self._non_shared_update_time, lun_num, True, request_values)
             request_values =  self._vd_stats[lun_num].WriteIOLatencyBuckets
             self._tsdb.update_lun_request_latency_series( self._get_host_name(),
-                    self._update_time.value, lun_num, False, request_values)
+                    self._non_shared_update_time, lun_num, False, request_values)
             
     
     def _slow_tsdb_tasks(self):

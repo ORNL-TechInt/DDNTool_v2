@@ -30,8 +30,9 @@ setup (
    author       = "Ross Miller",
    author_email = "rgmiller@ornl.gov",
    
-   version      = "2.3",
-   url          = "http://www.olcf.ornl.gov", # don't have a web page dedicated to the tool
+   version      = "2.4",
+   url          = "https://github.com/ORNL-TechInt/DDNTool_v2",
+   # the github page is a close to a home page for the tool as we've got
 
    requires     = ["ddn.sfa.api (>= 2.3.0)"],
    

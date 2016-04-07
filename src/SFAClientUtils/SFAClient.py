@@ -490,6 +490,9 @@ class SFAClient():
                           lun_num, transfer_bytes,read_bytes, write_bytes,
                           forwarded_bytes, total_ios, read_ios, write_ios,
                           forwarded_ios, pool_state)
+            
+        # Now flush all the queued data at one shot
+        self._tsdb.flush_to_db()
         
     
     def _medium_tsdb_tasks(self):
@@ -512,7 +515,10 @@ class SFAClient():
             self._tsdb.update_lun_request_latency_series( self._get_host_name(),
                     self._non_shared_update_time, lun_num, False, request_values)
             
-    
+        # Now flush all the queued data at one shot
+        self._tsdb.flush_to_db()
+
+
     def _slow_tsdb_tasks(self):
         '''
         Update all the values in the time-series database that need to be

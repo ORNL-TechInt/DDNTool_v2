@@ -68,6 +68,9 @@ class SFAInfluxDb(object):
         self.logger = logging.getLogger( 'DDNTool_SFAInfluxDb')
         self.logger.debug( 'Creating instance of SFAInfluxDb')
 
+        # This holds the JSON data that will be sent to the database
+        self._json_body = []
+        
         # open the database connection
         self._dbcon = InfluxDBClient(host=host, port=8086, username=user, password=password, database=db_name)
         
@@ -82,12 +85,25 @@ class SFAInfluxDb(object):
                         raise err
                             
     
+    def flush_to_db(self):
+        '''
+        Send all the queued up data to the database server
+        '''
+        
+        if self._json_body:
+            self._dbcon.write_points(self._json_body)
+            self._json_body = []
+
+
     def update_lun_series( self, sfa_host_name, update_time, lun_num,
                            transfer_bytes, read_bytes, write_bytes,
                            forwarded_bytes, total_ios, read_ios, write_ios,
                            forwarded_ios, pool_state):
         '''
         Updates the various per-lun series in the databse
+        
+        Note: This function only queues the values for later output.  To
+        actually send anything to the database, you must call flush_to_db(). 
         '''
         
         # Schema:
@@ -100,7 +116,7 @@ class SFAInfluxDb(object):
         # This generages too much output, even for debug
         
         # this is what will be sent over to the influx server
-        json_body = [ {
+        self._json_body.append({
            "measurement": MEASUREMENT_NAMES["LUN_DATA"],
            "tags": {
                 "sfa_host": sfa_host_name,
@@ -118,11 +134,9 @@ class SFAInfluxDb(object):
               "forwarded_iops":   forwarded_ios,
               "pool_state":      pool_state,
             }
-        } ]
+        })
         
-        self._dbcon.write_points(json_body)
-        
-        
+
     def update_lun_request_size_series( self, sfa_host_name, update_time,
                                        lun_num, read_series, size_buckets):
         '''
@@ -131,6 +145,9 @@ class SFAInfluxDb(object):
         size_buckets is a list containing the number of requests for each
         size and is expected to match the size values listed in
         _expected_size_field_values
+        
+        Note: This function only queues the values for later output.  To
+        actually send anything to the database, you must call flush_to_db(). 
         '''
         
         # Schema:
@@ -138,14 +155,10 @@ class SFAInfluxDb(object):
         # 'write_request_sizes' (depending on value of read_series)
         # Tags: sfa host name, lun number, bucket
         # Fields: value
-    
-        
+
         # sanity check
         if len(size_buckets) != len(self._expected_size_field_values):
             raise RuntimeError( "Invalid number of size buckets")
-            
-        # this is what will be sent over to the influx server
-        json_body = [ ]
         
         # structure to hold one mesurement
         measurement = {
@@ -167,11 +180,10 @@ class SFAInfluxDb(object):
         for i in range(len(size_buckets)):
             measurement["tags"]["bucket"] = self._expected_size_field_values[i]
             measurement["fields"]["value"] = size_buckets[i]
-            json_body.append( copy.deepcopy(measurement))
+            self._json_body.append( copy.deepcopy(measurement))
             
-        self._dbcon.write_points(json_body)   
-                     
-    
+
+
     def update_lun_request_latency_series( self, sfa_host_name, update_time,
                                        lun_num, read_series, latency_buckets):
         '''
@@ -180,6 +192,9 @@ class SFAInfluxDb(object):
         latency_buckets is a list containing the number of requests for each
         latency and is expected to match the values listed in 
         _expected_latency_field_values
+        
+        Note: This function only queues the values for later output.  To
+        actually send anything to the database, you must call flush_to_db(). 
         '''
         
         # Schema:
@@ -191,10 +206,7 @@ class SFAInfluxDb(object):
         # sanity check
         if len(latency_buckets) != len(self._expected_latency_field_values):
             raise RuntimeError( "Invalid number of size buckets")       
-            
-        # this is what will be sent over to the influx server
-        json_body = [ ]
-        
+                   
         # structure to hold one mesurement
         measurement = {
             "time" : update_time * 1000000000,
@@ -215,6 +227,5 @@ class SFAInfluxDb(object):
         for i in range(len(latency_buckets)):
             measurement["tags"]["bucket"] = self._expected_latency_field_values[i]
             measurement["fields"]["value"] = latency_buckets[i]
-            json_body.append( copy.deepcopy(measurement))
+            self._json_body.append( copy.deepcopy(measurement))
             
-        self._dbcon.write_points(json_body)   

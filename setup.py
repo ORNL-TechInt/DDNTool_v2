@@ -30,7 +30,7 @@ setup (
    author       = "Ross Miller",
    author_email = "rgmiller@ornl.gov",
    
-   version      = "2.4",
+   version      = "2.4.1",
    url          = "https://github.com/ORNL-TechInt/DDNTool_v2",
    # the github page is a close to a home page for the tool as we've got
 

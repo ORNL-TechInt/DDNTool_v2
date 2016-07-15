@@ -1,0 +1,12 @@
+# Note: This file is incomplete!!  It's really just a placeholder for now!
+[Unit]
+Description=DDNTool
+
+[Service]
+Type=
+ExecStart=
+ExecStop=
+RemainAfterExit=
+
+[Install]
+WantedBy=

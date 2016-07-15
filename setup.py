@@ -57,6 +57,14 @@ if sys.version_info[:3] < (2, 6, 0):
     raise RuntimeError("This application requires Python 2.6 or 2.7")
 
 
+# Choose the appropriate startup script to include in the package
+if version == 7:
+    # Use the systemd script
+    startup_tuple = ('/usr/lib/systemd/system', ['src/init/DDNTool.service'])
+else:
+    # Use the upstart script
+    startup_tuple = ('/etc/init', ['src/init/DDNTool.conf'])
+    
 setup(
     name         = "DDNTool",
     description  = "A tool for monitoring performance of multiple " +
@@ -84,7 +92,6 @@ setup(
     # scripts list isn't affected by the package_dir dict
     scripts      = ["src/DDNTool.py"],
 
-    # this is the upstart config file and sample configuration file
-    data_files   = [('/etc/init', ['src/init/DDNTool.conf']),
-                    ('/etc/', ['src/ddntool.conf.sample'])]
+    # this is the sample configuration file and the appropriate startup script
+    data_files   = [('/etc/', ['src/ddntool.conf.sample']), startup_tuple]
 )

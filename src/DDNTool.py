@@ -228,7 +228,11 @@ def main_func():
     main_args = parser.parse_args()
 
     config = ConfigParser.ConfigParser()
-    config.read(main_args.conf_file)
+    if not config.read(main_args.conf_file):
+        # Technically, config.read() returns a list of successfully parsed
+        # files.  'if not config.read()' tests for an empty list.
+        raise RuntimeError( "Could not read config file: %s" % \
+                            main_args.conf_file)
     
     # Set up logging
     root_logger = logging.getLogger()

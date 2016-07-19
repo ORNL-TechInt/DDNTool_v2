@@ -1,0 +1,4 @@
+# It's unclear to me what conditions cause us to need this fine.  Prior to
+# moving (unrelated) .py files into the DDNTool package directory, RPM's built
+# just fine without this file.  After the move, this file is required...
+include init/DDNTool.conf src/ddntool.conf.sample init/DDNTool.service

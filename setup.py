@@ -60,10 +60,10 @@ if sys.version_info[:3] < (2, 6, 0):
 # Choose the appropriate startup script to include in the package
 if version == 7:
     # Use the systemd script
-    startup_tuple = ('/usr/lib/systemd/system', ['src/init/DDNTool.service'])
+    startup_tuple = ('/usr/lib/systemd/system', ['init/DDNTool.service'])
 else:
     # Use the upstart script
-    startup_tuple = ('/etc/init', ['src/init/DDNTool.conf'])
+    startup_tuple = ('/etc/init', ['init/DDNTool.conf'])
     
 setup(
     name         = "DDNTool",
@@ -86,9 +86,10 @@ setup(
     requires     = ["ddn.sfa.api (>= 2.3.0)"],
 
     package_dir  = {"": "src"},
-    py_modules   = ["bracket_expand"],
-    packages     = ["SFAClientUtils"],
-
+    #py_modules   = ["bracket_expand"],
+    #packages     = ["SFAClientUtils"],
+    packages      = find_packages('src'),
+    
     # scripts list isn't affected by the package_dir dict
     scripts      = ["src/DDNTool.py"],
 

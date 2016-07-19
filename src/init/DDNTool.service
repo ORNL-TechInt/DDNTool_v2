@@ -1,12 +1,20 @@
-# Note: This file is incomplete!!  It's really just a placeholder for now!
 [Unit]
-Description=DDNTool
+Description=Monitoring Tool for DDN Disk Controllers
+After=syslog.target network.target
+#Before=
 
 [Service]
-Type=
-ExecStart=
-ExecStop=
-RemainAfterExit=
+Type=simple
+#PIDFile=
+#EnvironmentFile=
+#ExecStartPre=
+ExecStart=/usr/bin/DDNTool.py -f /etc/DDNTool.conf
+#ExecStartPost=
+#ExecStop=
+KillSignal=SIGINT
+# SIGINT instead of the default SIGTERM because the code catches the
+# KeyboardInterrupt exception that's generated with a SIGINT or CTRL-C.
+RemainAfterExit=False
 
 [Install]
-WantedBy=
+WantedBy=multi-user.target

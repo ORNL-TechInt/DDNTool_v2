@@ -24,7 +24,7 @@
 '''
 Python code to perform 'bracket expansion' similar to Bash shell.
 Expects a list of strings containing bracket expressions such as:
-  "name[1-3][a,b]"
+  "name[1-3][a,b,c]"
 and expands them into a (longer) list of strings with the bracket
 expressions evaluated.  The above example would be expanded to:
   "name1a", "name2a", "name3a", "name1b", "name2b", "name3b",

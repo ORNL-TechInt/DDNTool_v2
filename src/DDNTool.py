@@ -34,9 +34,8 @@ import os
 import signal
 import time
 
-from DDNTool.SFAClientUtils import SFAClient, SFAMySqlDb, SFAInfluxDb
-
-from DDNTool import bracket_expand, bracket_aware_split
+from DDNToolSupport.SFAClientUtils import SFAClient, SFAMySqlDb, SFAInfluxDb
+from DDNToolSupport import bracket_expand, bracket_aware_split
 
 ####################### Remote Debugging using winpdb #######################
 #import rpdb2

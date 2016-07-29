@@ -21,7 +21,7 @@
 import unittest
 import time
 
-from DDNTool.SFAClientUtils.SFATimeSeries import SFATimeSeries, EmptyTimeSeriesException
+from DDNToolSupport.SFAClientUtils.SFATimeSeries import SFATimeSeries, EmptyTimeSeriesException
 
 # Constants used for building the series data
 #VALUE_START=1       # Starting value when adding data to the series

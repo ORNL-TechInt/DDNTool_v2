@@ -1,4 +1,4 @@
-# The __init__.py file for the DDNTool package.
+# The __init__.py file for the DDNToolSupport package.
 
 '''
 This package contains functions and classes used by DDNTool.py.  They're not

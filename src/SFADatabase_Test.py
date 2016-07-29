@@ -29,7 +29,7 @@
 # really only checks for db initialization...
 
 import unittest
-from DDNTool.SFAClientUtils.SFAMySqlDb import SFAMySqlDb
+from DDNToolSupport.SFAClientUtils.SFAMySqlDb import SFAMySqlDb
 
 DB_NAME = 'test'
 DB_HOST = 'localhost'

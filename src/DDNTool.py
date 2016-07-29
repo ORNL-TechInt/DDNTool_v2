@@ -33,8 +33,19 @@ import logging.handlers # Don't delete this line! It's needed for logging to sys
 import os
 import signal
 import time
+import sys
 
-from DDNToolSupport.SFAClientUtils import SFAClient, SFAMySqlDb, SFAInfluxDb
+from DDNToolSupport.SFAClientUtils import SFAClient, SFAMySqlDb
+
+try:
+    from DDNToolSupport.SFAClientUtils import SFAInfluxDb    
+except ImportError:
+    # InfluxDb support is optional.  If SFAInfluxDb can't import (because its
+    # dependencies aren't installed) and the config file is asking for it,
+    # then we'll throw a runtime exception down in the config parsing section.
+    pass
+
+
 from DDNToolSupport import bracket_expand, bracket_aware_split
 
 ####################### Remote Debugging using winpdb #######################
@@ -268,6 +279,11 @@ def main_func():
     
     global logger
     logger = logging.getLogger( "DDNTool")
+
+    # Check to see if we need but don't actually have the influx module
+    if config.has_section('TSDb') and \
+       not ("DDNToolSupport.SFAClientUtils.SFAInfluxDb" in sys.modules):
+        raise RuntimeError( "InfluxDB support not available.  Install the InfluxDB modules or comment out that section of the config file")
     
     # Initialize the database(s) if requested
     if  main_args.init_db:

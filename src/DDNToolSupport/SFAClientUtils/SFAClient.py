@@ -22,9 +22,18 @@
 import ConfigParser
 import logging
 import SFAMySqlDb
-import SFAInfluxDb
 from SFATimeSeries import SFATimeSeries
 from SFATimeSeries import EmptyTimeSeriesException
+
+try:
+    import SFAInfluxDb    
+except ImportError:
+    # InfluxDb support is optional.  The main function specifically checks
+    # for the case where the user configured the tool to output to InfluxDb
+    # and and will raise a RuntimeError if the import failed.  So, it's safe
+    # to silenty ignore such an error here.
+    pass
+
 
 from ddn.sfa.api import *
 from pywbem.cim_operations import CIMError

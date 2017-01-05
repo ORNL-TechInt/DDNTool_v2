@@ -45,7 +45,7 @@ from pywbem.cim_operations import CIMError
 # in case we change our minds about this.
 #
 
-MINIMUM_FW_VER = '2.3.0' 
+MINIMUM_FW_VER = '2.3.0'
 # 2.3.0 is needed for the read & write bandwidth numbers
 
 class UnexpectedClientDataException( Exception):
@@ -54,6 +54,15 @@ class UnexpectedClientDataException( Exception):
     or don't understand.  This is sort of one step up from an
     assert.  Hopefully, we won't use it too often.
     '''
+    pass    # don't need anything besides what's already in the base class
+
+class UnsupportedFirmwareException( Exception):
+    '''
+    Used when the the DDN firmware is outside of the range we support. (Currently,
+    we support firmware >= 2.3.0.)
+    '''
+    
+    # thrown by _verify_fw_version
     pass    # don't need anything besides what's already in the base class
 
     
@@ -85,6 +94,10 @@ class SFAClient():
         
         self._connected = False;
         self._exit_requested = False;
+        
+        # these will be filled out by _verify_fw_version()
+        self._fw_major = 0
+        self._fw_minor = 0
         
         # open up the config file and grab settings for the database and
         # polling intervals
@@ -118,22 +131,11 @@ class SFAClient():
         # everything as LUN's.  This maps one to the other.  (VD index is the key,
         # LUN number is the value.) It's updated at the medium frequency.
         self._vd_to_lun = { }
-
-        # open a connection to the database(s)
-        if self._have_sqldb:
-            self.logger.debug( 'Opening SQL DB connection')
-            self._sqldb = SFAMySqlDb.SFAMySqlDb(self._sqldb_user, self._sqldb_password,
-                                                self._sqldb_host, self._sqldb_name, False)
-            
-        if self._have_tsdb:
-            self.logger.debug( 'Opening time series DB connection')
-            self._tsdb = SFAInfluxDb.SFAInfluxDb(self._tsdb_user, self._tsdb_password,
-                                                 self._tsdb_host, self._tsdb_name, False)
     
         # connect to the SFA controller
         self.logger.debug( 'Connecting to DDN hardware')
         try:
-            APIConnect( self._uri, (self._sfa_user, self._sfa_password))        # @UndefinedVariable
+            APIConnect( self._uri, (self._sfa_user, self._sfa_password))     
         except CIMError, err:
             # Not sure of all the reasons this exception might happen, but
             # known ones are:
@@ -149,8 +151,23 @@ class SFAClient():
             self.logger.error( 'APIContextException connecting to "%s"    Details: %s'%(self._uri, err))          
             raise err
             
-            
         self.logger.debug( 'Connection established.')
+        
+        # make sure the firmware is new enough to have the features we need
+        self.logger.debug( 'Verifying Controller Firmware Version')
+        self._verify_fw_version() # throws an exception if the firmware isn't a version we support
+        
+        
+        # open a connection to the database(s)
+        if self._have_sqldb:
+            self.logger.debug( 'Opening SQL DB connection')
+            self._sqldb = SFAMySqlDb.SFAMySqlDb(self._sqldb_user, self._sqldb_password,
+                                                self._sqldb_host, self._sqldb_name, False)
+            
+        if self._have_tsdb:
+            self.logger.debug( 'Opening time series DB connection')
+            self._tsdb = SFAInfluxDb.SFAInfluxDb(self._tsdb_user, self._tsdb_password,
+                                                 self._tsdb_host, self._tsdb_name, False)
 
         self.logger.debug( 'Calling _time_series_init()')
         self._time_series_init()
@@ -169,18 +186,40 @@ class SFAClient():
         
         self.logger.debug( '__init__ completed')
         
+    # This function mostly exists for the case where the main process is
+    # initializing a new SQL Db.  It needs to create a short-lived SFAClient
+    # object in order to get the controller's firmware version.  After
+    # initializing the database, it will create the "real" client objects for
+    # all the controllers.  Since the controllers only allow one connection
+    # per thread, the main process needs to be able to force a disconnect
+    # (because we never no know the instance will actually be garbage-
+    #collected.)
+    def disconnect(self):
+        """
+        Disconnect from the DDN Controller.
         
+        Only one connection to a controller is allowed per thread.  If you need
+        to make a new SFAClient object to the same controller from the same 
+        thread, then call this function first.  (And after calling it, you might
+        as well unbind your instance variable, because this instance will be
+        pretty much useless.)
+        """
+        APIDisconnect()
+        
+    @property
+    def major_ver(self):
+        return self._fw_major
+    
+    @property
+    def minor_ver(self):
+        return self._fw_minor
+    
     def run(self):
         '''
         Main loop: Waits on the event, then polls the SFA, post-processes the
         data, publishes it to the database.  Then it clears the event.  Runs
         until the main processes sends an update time of 0.
         '''
-        
-        # make sure the firmware is new enough to have the features we need
-        self.logger.debug( 'Verifying Controller Firmware Version')
-        if not self._verify_fw_version():
-            return  # _verify_fw_version will output the necessary lines to the log        
         
         self.logger.debug( 'Starting main loop')
         
@@ -264,7 +303,7 @@ class SFAClient():
         Retrieves all the values we need to get from the controller at the fast interval.
         '''
         ##Virtual Disk Statistics 
-        vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
+        vd_stats = SFAVirtualDiskStatistics.getAll()
         
         self._vd_stats = { } # erase the old _vd_stats dictionary
         for stats in vd_stats:
@@ -326,7 +365,7 @@ class SFAClient():
         
         # Grab the storage pool data (so we can find out if the pool is in a degraded state)
         # Store it in a temporary dictionary, indexed by the pool's Index member
-        storage_pools = SFAStoragePool.getAll()  # @UndefinedVariable
+        storage_pools = SFAStoragePool.getAll()  
         pools_d = { }
         for pool in storage_pools:
             pools_d[pool.Index] = pool
@@ -335,7 +374,7 @@ class SFAClient():
 
         # Now, get all the virtual disks and map them back to the pool they're created
         # from.  (For now, we just want the pool state, not the whole SFAStoragePool object)
-        virt_disks = SFAVirtualDisk.getAll()  # @UndefinedVariable
+        virt_disks = SFAVirtualDisk.getAll()  
         for disk in virt_disks:
             # Save the PoolState field in the dictionary
             self._storage_pool_states[self._vd_to_lun[disk.Index]] = pools_d[disk.PoolIndex].PoolState
@@ -610,7 +649,7 @@ class SFAClient():
         self._update_lun_map()
 
         # initialize the time series arrays
-        vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
+        vd_stats = SFAVirtualDiskStatistics.getAll()  
         self._time_series['lun_read_iops'] = { }
         self._time_series['lun_write_iops'] = { }
         self._time_series['lun_transfer_bytes'] = { }
@@ -653,32 +692,47 @@ class SFAClient():
         hard coded into the database column headings)
         '''
 
-        expected_size_labels = ['IO Size <=4KiB', 'IO Size <=8KiB', 'IO Size <=16KiB',
-                'IO Size <=32KiB', 'IO Size <=64KiB', 'IO Size <=128KiB',
-                'IO Size <=256KiB', 'IO Size <=512KiB', 'IO Size <=1MiB',
-                'IO Size <=2MiB', 'IO Size <=4MiB', 'IO Size >4MiB']
-        expected_lun_latency_labels = ['Latency Counts <=16ms', 'Latency Counts <=32ms',
-                'Latency Counts <=64ms', 'Latency Counts <=128ms', 'Latency Counts <=256ms',
-                'Latency Counts <=512ms','Latency Counts <=1s', 'Latency Counts <=2s',
-                'Latency Counts <=4s', 'Latency Counts <=8s', 'Latency Counts <=16s',
-                'Latency Counts >16s']
+        expected_size_labels = ['<=4KiB', '<=8KiB', '<=16KiB', '<=32KiB',
+            '<=64KiB', '<=128KiB', '<=256KiB', '<=512KiB', '<=1MiB',
+            '<=2MiB', '<=4MiB', '>4MiB']
+
+        
+        # We're assuming the labels changed with the 3.0.0.0 firmware.  We
+        # *know* that the 3.0.1.5 firmware has the new labels, though.
+        # TODO! We should find out exactly which firmware version switched to
+        # the new labels!
+        expected_lun_latency_labels = { } # use the firmware major version for the key
+        expected_lun_latency_labels[2] = \
+            ['<=16ms', '<=32ms', '<=64ms', '<=128ms', '<=256ms', '<=512ms',
+             '<=1s', '<=2s', '<=4s', '<=8s', '<=16s','>16s']
+        
+        expected_lun_latency_labels[3] = \
+            ['<=4ms', '<=8ms', '<=16ms', '<=32ms', '<=64ms', '<=128ms',
+             '<=256ms', '<=512ms', '<=1s', '<=2s', '<=4s', '>4s']
+        
 #        expected_dd_latency_labels = ['Latency Counts <=4ms', 'Latency Counts <=8ms',
 #                'Latency Counts <=16ms', 'Latency Counts <=32ms', 'Latency Counts <=64ms',
 #                'Latency Counts <=128ms', 'Latency Counts <=256ms', 'Latency Counts <=512ms',
 #                'Latency Counts <=1s', 'Latency Counts <=2s', 'Latency Counts <=4s',
 #                'Latency Counts >4s']
 
-        vd_stats = SFAVirtualDiskStatistics.getAll()  # @UndefinedVariable
+        vd_stats = SFAVirtualDiskStatistics.getAll()
         for stats in vd_stats:
-            if stats.IOSizeIndexLabels != expected_size_labels:
+            # Some time around firmware version 3.0.1.5, the size labels changed
+            # from "IO Size <=4KiB" to just "<=4KiB".  (And the same for the
+            # other sizes.)  Since the numbers themselves didn't change, we're 
+            # just going to strip off the "IO Size" part - if it exists - before
+            # doing the comparison.  (Latency index labels are similar.)
+            if [x.split()[-1] for x in stats.IOSizeIndexLabels]  != expected_size_labels:
                 raise UnexpectedClientDataException(
                         "Unexpected IO size index labels for %s virtual disk %d" % \
                                 (self._get_host_name(), stats.Index))
-            if stats.IOLatencyIndexLabels != expected_lun_latency_labels:
+                            
+            if [x.split()[-1] for x in stats.IOLatencyIndexLabels] != expected_lun_latency_labels[self._fw_major]:
                 raise UnexpectedClientDataException(
                         "Unexpected IO latency index labels for %s virtual disk %d" % \
                                 (self._get_host_name(), stats.Index))
-#        disk_stats = SFADiskDriveStatistics.getAll()  # @UndefinedVariable
+#        disk_stats = SFADiskDriveStatistics.getAll()  
 #        # NOTE: getAll() is particularly slow for SFADiskDriveStatistics.  Might want to consider
 #        # caching this value. (It's fetched up in _time_series_init())
 #        for stats in disk_stats:
@@ -715,7 +769,7 @@ class SFAClient():
 
                 
     def _update_lun_map( self):
-        presentations = SFAPresentation.getAll()  # @UndefinedVariable
+        presentations = SFAPresentation.getAll() 
         for p in presentations:
             self._vd_to_lun[p.VirtualDiskIndex] = p.LUN
         self.logger.debug( "Mapped %d virtual disks to LUNs"%len(self._vd_to_lun))
@@ -723,13 +777,22 @@ class SFAClient():
     
     def _verify_fw_version(self):
         '''
-        Returns True if the controller firmware version is sufficiently new.
-        Returns False and writes an error to the log if it's not.
+        Checks the controller firmware version and throws an exception if it's too low.
         '''    
-        fw_version = SFAController.getAll()[0].FWRelease  # @UndefinedVariable
+        fw_version = SFAController.getAll()[0].FWRelease 
         # DDN version strings are 4 numbers separated by periods
         
         fw_nums = fw_version.split('.')
+        
+        # Save the major and minor numbers for later use
+        self._fw_major = int(fw_nums[0])
+        try:
+            self._fw_minor = int(fw_nums[1])
+        except IndexError:
+            self._fw_minor = 0 # It seems unlikely we'd ever hit this line, but...
+        
+        self.logger.debug( "FW Major: %d   FW Minor: %d"%(self._fw_major, self._fw_minor))
+            
         min_nums = MINIMUM_FW_VER.split('.')
         version_too_low = False
         for i in range(min(len(fw_nums), len(min_nums))):
@@ -743,8 +806,10 @@ class SFAClient():
                 break
         
         if version_too_low:
-            self.logger.error("Controller version '%s' is too old.  Minimum version is '%s'"%(fw_version, MINIMUM_FW_VER))
+            raise UnsupportedFirmwareException(
+                 "Controller version '%s' is too old.  Minimum version is '%s'"%
+                 (fw_version, MINIMUM_FW_VER))
         
-        return not version_too_low
+
         
         

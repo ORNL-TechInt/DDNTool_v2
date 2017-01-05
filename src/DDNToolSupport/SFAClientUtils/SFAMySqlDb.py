@@ -46,7 +46,9 @@ TABLE_NAMES = {
 
 # Partially complete SQL statements for creating the request size
 # and latency tables
-PARTIAL_LUN_LATENCY_TABLE_DEF = \
+
+# Latency table for older firmware versions ( < 3.0.0)
+PARTIAL_LUN_LATENCY_TABLE_DEF_OLD = \
     "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
     "LUN SMALLINT UNSIGNED NOT NULL, " \
     "16ms INT UNSIGNED NOT NULL, " \
@@ -61,6 +63,27 @@ PARTIAL_LUN_LATENCY_TABLE_DEF = \
     "8s INT UNSIGNED NOT NULL, " \
     "16s INT UNSIGNED NOT NULL, " \
     "Longer_Than_16s INT UNSIGNED NOT NULL, " \
+    "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
+    "INDEX( Hostname), INDEX( Disk_Num) )" \
+    "ENGINE=HEAP" \
+    ";"
+
+# Latency table for newer firmware versions ( >= 3.0.0)
+PARTIAL_LUN_LATENCY_TABLE_DEF_NEW = \
+    "(Hostname VARCHAR(75) NOT NULL, LastUpdate TIMESTAMP, " \
+    "LUN SMALLINT UNSIGNED NOT NULL, " \
+    "4ms INT UNSIGNED NOT NULL, " \
+    "8ms INT UNSIGNED NOT NULL, " \
+    "16ms INT UNSIGNED NOT NULL, " \
+    "32ms  INT UNSIGNED NOT NULL, " \
+    "64ms INT UNSIGNED NOT NULL, " \
+    "128ms INT UNSIGNED NOT NULL, " \
+    "256ms INT UNSIGNED NOT NULL, " \
+    "512ms INT UNSIGNED NOT NULL, " \
+    "1s INT UNSIGNED NOT NULL, " \
+    "2s INT UNSIGNED NOT NULL, " \
+    "4s INT UNSIGNED NOT NULL, " \
+    "Longer_Than_4s INT UNSIGNED NOT NULL, " \
     "CONSTRAINT unique_disk UNIQUE (Hostname, Disk_Num), "  \
     "INDEX( Hostname), INDEX( Disk_Num) )" \
     "ENGINE=HEAP" \
@@ -120,7 +143,7 @@ class SFAMySqlDb(object):
     '''
 
 
-    def __init__(self, user, password, host, db_name, init = False ):
+    def __init__(self, user, password, host, db_name, init = False, new_latency_table = False):
         '''
         Connect to the database and create the tables (if necessary)
         
@@ -137,7 +160,7 @@ class SFAMySqlDb(object):
         self._dbcon = mysql.connector.connect(user = user, password = password,
                                               host = host, database = db_name)
         if init:            
-            self._create_schema()
+            self._create_schema( new_latency_table)
         
  
     def update_lun_table( self, sfa_client_name, update_time, lun_num,
@@ -348,10 +371,13 @@ class SFAMySqlDb(object):
         cursor.close()
 
 
-    def _create_schema(self):
+    def _create_schema(self, new_latency_table):
         # Drop the old tables (since we're not storing long-term data, it's easier
         # to drop the old tables and re-create them than it is to use ALTER TABLE
         # statements.
+        # Note: Some time around firmware v3.0.1.5, the values the DDN's report
+        # for I/O latency changed.  So, now we have 2 choices for the lun
+        # latency tables.
         cursor = self._dbcon.cursor()
         cursor.execute( "SHOW TABLES;")
         results = cursor.fetchall()
@@ -376,9 +402,9 @@ class SFAMySqlDb(object):
         self._new_dd_write_request_size_table()
         self._new_dd_write_request_latency_table() 
         self._new_lun_read_request_size_table()
-        self._new_lun_read_request_latency_table()
+        self._new_lun_read_request_latency_table( new_latency_table)
         self._new_lun_write_request_size_table()
-        self._new_lun_write_request_latency_table()
+        self._new_lun_write_request_latency_table( new_latency_table)
 
     def _query_exec(self, query):
         '''
@@ -477,31 +503,39 @@ class SFAMySqlDb(object):
 
         self._query_exec( table_def)
 
-    def _new_lun_read_request_latency_table( self):
+    def _new_lun_read_request_latency_table( self, new_latency_table):
         '''
         Create the db table that holds virtual disk read request latency information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["LUN_READ_REQUEST_LATENCY_TABLE_NAME"] + \
-        " "  + PARTIAL_LUN_LATENCY_TABLE_DEF
+        "CREATE TABLE " + TABLE_NAMES["LUN_READ_REQUEST_LATENCY_TABLE_NAME"] + " "
+        if (new_latency_table):
+            table_def +=  PARTIAL_LUN_LATENCY_TABLE_DEF_NEW
+        else:
+            table_def +=  PARTIAL_LUN_LATENCY_TABLE_DEF_OLD
+        
         table_def = table_def.replace( 'Disk_Num', 'LUN')
 
         self._query_exec( table_def)
 
-    def _new_lun_write_request_latency_table( self):
+    def _new_lun_write_request_latency_table( self, new_latency_table):
         '''
         Create the db table that holds virtual disk write request latency information.
         '''
 
         table_def = \
-        "CREATE TABLE " + TABLE_NAMES["LUN_WRITE_REQUEST_LATENCY_TABLE_NAME"] + \
-        " "  + PARTIAL_LUN_LATENCY_TABLE_DEF
+        "CREATE TABLE " + TABLE_NAMES["LUN_WRITE_REQUEST_LATENCY_TABLE_NAME"] + " "
+        if (new_latency_table):
+            table_def +=  PARTIAL_LUN_LATENCY_TABLE_DEF_NEW
+        else:
+            table_def +=  PARTIAL_LUN_LATENCY_TABLE_DEF_OLD
+    
         table_def = table_def.replace( 'Disk_Num', 'LUN')
 
         self._query_exec( table_def)
 
-# Disk drive request size and latency tables
+    # Disk drive request size and latency tables
     def _new_dd_read_request_size_table( self):
         '''
         Create the db table that holds disk drive read request size information.

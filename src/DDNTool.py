@@ -285,6 +285,17 @@ def main_func():
        not ("DDNToolSupport.SFAClientUtils.SFAInfluxDb" in sys.modules):
         raise RuntimeError( "InfluxDB support not available.  Install the InfluxDB modules or comment out that section of the config file")
     
+    
+    # Initialize the list of controller hosts
+    # (We're doing this up here because we need a host name in order to
+    # initialize the SQL database.  See the comments below for why.)
+    # The 'real' use of this list occurs further down where we create the
+    # ProcessData objects.
+    sfa_processes = [] # holds the ProcessData objects, not SFAClient objects!
+    sfa_hosts = [ host.strip() for host in
+            bracket_aware_split(config.get('ddn_hardware', 'sfa_hosts')) ]
+    bracket_expand( sfa_hosts)
+    
     # Initialize the database(s) if requested
     if  main_args.init_db:
         logger.info(  "Initializing the the database(s)...")
@@ -305,11 +316,22 @@ def main_func():
             sqldb_configured = True       
         
         if sqldb_configured:
+            # We need to know whether to create 'old style' or 'new style' 
+            # latency tables.  We decide based on the controller firmware,
+            # which means we need an instance of SFAClient.
+            client = SFAClient.SFAClient( sfa_hosts[0], main_args.conf_file, None, None)
+            new_style_latency_tables = False
+            if client.major_ver > 2:
+                new_style_latency_tables = True
+            client.disconnect()
+            client = None
+            
             # don't actually need the db connection, but this is how we force
             # the db init code to run
             db = SFAMySqlDb.SFAMySqlDb(sqldb_user, sqldb_password,   # @UnusedVariable
                                        sqldb_host, sqldb_name,
-                                       main_args.init_db)
+                                       main_args.init_db,
+                                       new_style_latency_tables)
             db = None  # @UnusedVariable
         
         if config.has_section('TSDb'):
@@ -330,10 +352,6 @@ def main_func():
     update_time = multiprocessing.Value( 'L', 0)
     
     # Fork a process for each controller in the config file
-    sfa_processes = [] # holds the ProcessData objects, not SFAClient objects!
-    sfa_hosts = [ host.strip() for host in
-            bracket_aware_split(config.get('ddn_hardware', 'sfa_hosts')) ]
-    bracket_expand( sfa_hosts)
     for host in sfa_hosts:
         sfa_processes.append( ProcessData( host, main_args.conf_file, update_time))       
         

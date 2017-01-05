@@ -43,9 +43,15 @@ class SFAInfluxDb(object):
                                    '<=64KiB', '<=128KiB', '<=256KiB',
                                    '<=512KiB', '<=1MiB', '<=2MiB', '<=4MiB',
                                    '>4MiB']
-    _expected_latency_field_values = ['<=16ms', '<=32ms', '<=64ms', '<=128ms',
-                                      '<=256ms', '<=512ms','<=1s', '<=2s',
-                                      '<=4s', '<=8s', '<=16s', '>16s']
+    _expected_latency_field_values_old = ['<=16ms', '<=32ms', '<=64ms',
+                                          '<=128ms', '<=256ms', '<=512ms',
+                                          '<=1s', '<=2s', '<=4s', '<=8s',
+                                          '<=16s', '>16s']
+    
+    _expected_latency_field_values_new = ['<=4ms', '<=8ms', '<=16ms', '<=32ms', 
+                                          '<=64ms', '<=128ms', '<=256ms',
+                                          '<=512ms', '<=1s', '<=2s', '<=4s',
+                                          '>4s']
     # Note: We're hard-coding the size and latency buckets rather than trying
     # to get them from the DDN API.  When SFAClient objects start up, they
     # verify that the size buckets that the DDN controllers are using match
@@ -54,7 +60,7 @@ class SFAInfluxDb(object):
 
 
 
-    def __init__(self, user, password, host, db_name, init = False):
+    def __init__(self, user, password, host, db_name, use_new_latency_values, init = False):
         '''
         Connect to the InfluxDB server
         
@@ -74,7 +80,14 @@ class SFAInfluxDb(object):
         # open the database connection
         self._dbcon = InfluxDBClient(host=host, port=8086, username=user, password=password, database=db_name)
         
-        if init:
+        # chose the appropriate labels for the latency field values
+        # (depends on which version of the DDN firmware is installed)
+        if use_new_latency_values:
+            self._expected_latency_field_values = self._expected_latency_field_values_new
+        else:
+            self._expected_latency_field_values = self._expected_latency_field_values_old
+        
+        if init:            
             for name in MEASUREMENT_NAMES.values():
                 try:
                     query = "DROP MEASUREMENT %s"%name
@@ -205,7 +218,7 @@ class SFAInfluxDb(object):
         
         # sanity check
         if len(latency_buckets) != len(self._expected_latency_field_values):
-            raise RuntimeError( "Invalid number of size buckets")       
+            raise RuntimeError( "Invalid number of latency buckets")       
                    
         # structure to hold one mesurement
         measurement = {

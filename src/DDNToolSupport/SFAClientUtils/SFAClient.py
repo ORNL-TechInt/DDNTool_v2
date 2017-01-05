@@ -31,7 +31,7 @@ except ImportError:
     # InfluxDb support is optional.  The main function specifically checks
     # for the case where the user configured the tool to output to InfluxDb
     # and and will raise a RuntimeError if the import failed.  So, it's safe
-    # to silenty ignore such an error here.
+    # to silently ignore such an error here.
     pass
 
 
@@ -167,7 +167,9 @@ class SFAClient():
         if self._have_tsdb:
             self.logger.debug( 'Opening time series DB connection')
             self._tsdb = SFAInfluxDb.SFAInfluxDb(self._tsdb_user, self._tsdb_password,
-                                                 self._tsdb_host, self._tsdb_name, False)
+                                                 self._tsdb_host, self._tsdb_name,
+                                                 (self._fw_major >= 3), False)
+            # Firmware version 3 is where we switch to the new latency table labels
 
         self.logger.debug( 'Calling _time_series_init()')
         self._time_series_init()

@@ -315,17 +315,18 @@ def main_func():
             sqldb_name = config.get('database', 'db_name')
             sqldb_configured = True       
         
-        if sqldb_configured:
-            # We need to know whether to create 'old style' or 'new style' 
-            # latency tables.  We decide based on the controller firmware,
-            # which means we need an instance of SFAClient.
-            client = SFAClient.SFAClient( sfa_hosts[0], main_args.conf_file, None, None)
-            new_style_latency_tables = False
-            if client.major_ver > 2:
-                new_style_latency_tables = True
-            client.disconnect()
-            client = None
+        # We need to know whether to create 'old style' or 'new style' latency
+        # tables.  (The same goes for the time series db.)  We decide based on
+        # the controller firmware, which means we need an instance of
+        # SFAClient.
+        client = SFAClient.SFAClient( sfa_hosts[0], main_args.conf_file, None, None)
+        new_style_latency_tables = False
+        if client.major_ver > 2:
+            new_style_latency_tables = True
+        client.disconnect()
+        client = None
             
+        if sqldb_configured:
             # don't actually need the db connection, but this is how we force
             # the db init code to run
             db = SFAMySqlDb.SFAMySqlDb(sqldb_user, sqldb_password,   # @UnusedVariable
@@ -343,7 +344,8 @@ def main_func():
             # force the init code to run
             db = SFAInfluxDb.SFAInfluxDb( tsdb_user, tsdb_password, # @UnusedVariable
                                           tsdb_host, tsdb_name,
-                                          main_args.init_db)
+                                          main_args.init_db,
+                                          new_style_latency_tables)
             db = None # @UnusedVariable
 
     # shared memory value that all the sub-processes will have access to

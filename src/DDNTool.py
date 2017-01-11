@@ -344,8 +344,8 @@ def main_func():
             # force the init code to run
             db = SFAInfluxDb.SFAInfluxDb( tsdb_user, tsdb_password, # @UnusedVariable
                                           tsdb_host, tsdb_name,
-                                          main_args.init_db,
-                                          new_style_latency_tables)
+                                          new_style_latency_tables,
+                                          main_args.init_db)
             db = None # @UnusedVariable
 
     # shared memory value that all the sub-processes will have access to

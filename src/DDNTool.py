@@ -264,14 +264,10 @@ def main_func():
         root_logger.setLevel( logging.DEBUG)
     else:
         root_logger.setLevel( logging.INFO)
-        
-        # Disable some of the more excessive log messages that
-        # the DDN API and some other libraries emit
-        for log_name in [ 'APIContext', 'pywebm', 'root',
-                          'SFADiskDriveStatistics', 'SFAPresentation',
-                          'SFAVirtualDiskStatistics' ]:
-            temp_log = logging.getLogger( log_name)
-            temp_log.setLevel( logging.WARNING)
+       
+        # throttle back some of the more excessive log messages emitted
+        # from the DDN API layer
+        logging.getLogger( 'ddn.sfa.core').setLevel( logging.WARNING) 
 
     # the requests package (used by the influx package) is very verbose, so
     # limit it even when we're in debug mode

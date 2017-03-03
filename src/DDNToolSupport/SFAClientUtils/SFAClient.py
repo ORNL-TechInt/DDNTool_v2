@@ -223,7 +223,7 @@ class SFAClient():
         until the main processes sends an update time of 0.
         '''
         
-        self.logger.debug( 'Starting main loop')
+        self.logger.info( 'Starting main loop')
         
         # Run the fast poll stuff once right away.  The reason has to do with the time
         # series data:  in order to calculate an average, we need 2 data points.  Calling
@@ -242,7 +242,7 @@ class SFAClient():
             
             self.logger.debug( "Waiting on event")
             self._event.wait()  # wait until we're told to poll
-            self.logger.debug( "Waking up")
+            self.logger.info( "Waking up")
                       
             fast_iteration += 1
             

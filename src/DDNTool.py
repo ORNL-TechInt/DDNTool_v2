@@ -45,6 +45,15 @@ except ImportError:
     # then we'll throw a runtime exception down in the config parsing section.
     pass
 
+import ssl
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    # Old Python doesn't check https by default
+    pass
+else:
+    # skip ssl verifications
+    ssl._create_default_https_context = _create_unverified_https_context
 
 from DDNToolSupport import bracket_expand, bracket_aware_split
 

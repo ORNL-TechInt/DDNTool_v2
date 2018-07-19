@@ -379,6 +379,8 @@ class SFAClient():
         virt_disks = SFAVirtualDisk.getAll()  
         for disk in virt_disks:
             # Save the PoolState field in the dictionary
+            # Note: the "or 0" is a work-around for an apparent bug in the latest firmware
+            # that sets the PoolState to None instead of 0 when the pool is healthy.
             self._storage_pool_states[self._vd_to_lun[disk.Index]] = pools_d[disk.PoolIndex].PoolState or 0
         
 

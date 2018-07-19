@@ -379,7 +379,7 @@ class SFAClient():
         virt_disks = SFAVirtualDisk.getAll()  
         for disk in virt_disks:
             # Save the PoolState field in the dictionary
-            self._storage_pool_states[self._vd_to_lun[disk.Index]] = pools_d[disk.PoolIndex].PoolState
+            self._storage_pool_states[self._vd_to_lun[disk.Index]] = pools_d[disk.PoolIndex].PoolState or 0
         
 
         
@@ -711,6 +711,11 @@ class SFAClient():
         expected_lun_latency_labels[3] = \
             ['<=4ms', '<=8ms', '<=16ms', '<=32ms', '<=64ms', '<=128ms',
              '<=256ms', '<=512ms', '<=1s', '<=2s', '<=4s', '>4s']
+
+        expected_lun_latency_labels[11] = \
+            ['<=4ms', '<=8ms', '<=16ms', '<=32ms', '<=64ms', '<=128ms',
+             '<=256ms', '<=512ms', '<=1s', '<=2s', '<=4s', '>4s']
+
         
 #        expected_dd_latency_labels = ['Latency Counts <=4ms', 'Latency Counts <=8ms',
 #                'Latency Counts <=16ms', 'Latency Counts <=32ms', 'Latency Counts <=64ms',
